@@ -36,18 +36,31 @@ interface VideoAnalysisData {
   format: string;
 }
 
+interface SegmentInfo {
+  segment_number: number;
+  filename: string;
+  path: string;
+  start_time: number;
+  end_time: number;
+  duration: number;
+  size_bytes: number;
+  size_mb: number;
+}
+
 interface ProcessingResult {
   success: boolean;
   message: string;
   input_file: string;
   output_file: string;
   output_path: string;
+  segments: SegmentInfo[];
   settings: {
-    noise_threshold_percent: number;
-    padding_duration: number;
+    audio_sensitivity: number;
+    merge_threshold: number;
   };
   processing_stats: {
     hits_detected: number;
+    segments_saved: number;
     total_duration: string;
     montage_duration: string;
     compression_ratio: number;
@@ -127,8 +140,8 @@ export default function Home() {
 
   // Handle video processing
   const handleProcess = async (settings: {
-    noiseThresholdPercent: number;
-    paddingDuration: number;
+    audioSensitivity: number;
+    mergeThreshold: number;
   }) => {
     if (!selectedFile) return;
 

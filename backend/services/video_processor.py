@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import os
 import logging
 from pathlib import Path
@@ -187,6 +187,104 @@ class VideoProcessor:
             logger.error(f"DURATION: Failed to get video duration: {str(e)}")
             return 0.0
 
+    def _save_individual_segments(
+        self, file_path: str, segments: List[Tuple[float, float]], base_name: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Save individual segments as separate video files
+        Returns list of segment information
+        """
+        logger.info(f"SEGMENTS: Saving {len(segments)} individual segments")
+
+        if not segments:
+            logger.error("SEGMENTS: No segments to save")
+            return []
+
+        segment_info = []
+        input_filename = os.path.basename(file_path)
+        name, ext = os.path.splitext(input_filename)
+        clean_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)  # Clean filename for segments
+
+        for i, (start, end) in enumerate(segments):
+            segment_filename = f"{clean_name}.segment.{i+1}{ext}"
+            segment_path = os.path.join(self.output_dir, segment_filename)
+
+            logger.info(
+                f"SEGMENT {i+1}: Creating segment {start:.2f}s - {end:.2f}s -> {segment_filename}"
+            )
+
+            # FFmpeg command to extract segment
+            cmd = [
+                self.ffmpeg_path,
+                "-ss",
+                str(start),
+                "-t",
+                str(end - start),
+                "-i",
+                file_path,
+                "-c:v",
+                "libx264",
+                "-c:a",
+                "aac",
+                "-preset",
+                "fast",
+                "-crf",
+                "23",
+                "-movflags",
+                "+faststart",
+                segment_path,
+            ]
+
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=600
+                )  # 10 minutes max per segment
+
+                if result.returncode != 0:
+                    logger.error(
+                        f"SEGMENT {i+1}: FFmpeg failed with return code {result.returncode}"
+                    )
+                    logger.error(f"SEGMENT {i+1}: stderr: {result.stderr}")
+                    continue
+
+                # Verify segment file was created
+                if not os.path.exists(segment_path):
+                    logger.error(
+                        f"SEGMENT {i+1}: Output file not created: {segment_path}"
+                    )
+                    continue
+
+                segment_size = os.path.getsize(segment_path)
+                logger.info(
+                    f"SEGMENT {i+1}: Successfully created segment: {segment_filename} ({segment_size} bytes)"
+                )
+
+                # Add segment info
+                segment_info.append(
+                    {
+                        "segment_number": i + 1,
+                        "filename": segment_filename,
+                        "path": f"/outputs/{segment_filename}",
+                        "start_time": round(start, 2),
+                        "end_time": round(end, 2),
+                        "duration": round(end - start, 2),
+                        "size_bytes": segment_size,
+                        "size_mb": round(segment_size / (1024 * 1024), 2),
+                    }
+                )
+
+            except subprocess.TimeoutExpired:
+                logger.error(f"SEGMENT {i+1}: Segment creation timed out")
+                continue
+            except Exception as e:
+                logger.error(f"SEGMENT {i+1}: Segment creation failed: {str(e)}")
+                continue
+
+        logger.info(
+            f"SEGMENTS: Successfully saved {len(segment_info)} out of {len(segments)} segments"
+        )
+        return segment_info
+
     def _create_montage(
         self, file_path: str, segments: List[Tuple[float, float]], output_path: str
     ) -> bool:
@@ -325,7 +423,13 @@ class VideoProcessor:
                     },
                 }
 
-            # Step 2: Create montage from combo segments
+            # Step 2: Save individual segments
+            logger.info("SEGMENTS: Saving individual segments to disk...")
+            segment_info = self._save_individual_segments(
+                file_path, combo_segments, name
+            )
+
+            # Step 3: Create montage from combo segments
             montage_success = self._create_montage(
                 file_path, combo_segments, output_path
             )
@@ -361,12 +465,14 @@ class VideoProcessor:
                 "input_file": input_filename,
                 "output_file": output_filename,
                 "output_path": f"/outputs/{output_filename}",  # Web-accessible path
+                "segments": segment_info,  # Individual segment information
                 "settings": {
                     "audio_sensitivity": audio_sensitivity,
                     "merge_threshold": merge_threshold,
                 },
                 "processing_stats": {
                     "hits_detected": len(combo_segments),
+                    "segments_saved": len(segment_info),
                     "total_duration": format_duration(original_duration),
                     "montage_duration": format_duration(total_combo_time),
                     "compression_ratio": round(compression_ratio, 2),
@@ -380,6 +486,129 @@ class VideoProcessor:
         except Exception as e:
             logger.error(f"PROCESS: Heavy bag video processing failed: {str(e)}")
             raise RuntimeError(f"Heavy bag video processing failed: {str(e)}")
+
+    async def combine_selected_segments(
+        self, segment_filenames: List[str], output_filename: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Combine selected segments into a new video file
+
+        Args:
+            segment_filenames: List of segment filenames to combine
+            output_filename: Optional custom output filename
+
+        Returns:
+            Dictionary with success status and file information
+        """
+        logger.info(f"COMBINE: Combining {len(segment_filenames)} selected segments")
+
+        if not segment_filenames:
+            logger.error("COMBINE: No segments provided")
+            raise ValueError("No segments provided for combining")
+
+        # Validate that all segment files exist
+        segment_paths = []
+        for filename in segment_filenames:
+            segment_path = os.path.join(self.output_dir, filename)
+            if not os.path.exists(segment_path):
+                logger.error(f"COMBINE: Segment file not found: {filename}")
+                raise FileNotFoundError(f"Segment file not found: {filename}")
+            segment_paths.append(segment_path)
+
+        try:
+            # Generate output filename if not provided
+            if not output_filename:
+                timestamp = uuid.uuid4().hex[:8]
+                output_filename = f"custom_combo_{timestamp}.mp4"
+
+            output_path = os.path.join(self.output_dir, output_filename)
+            logger.info(f"COMBINE: Creating combined video: {output_filename}")
+
+            # Create FFmpeg command for combining segments
+            # Use concat demuxer for better performance with many segments
+            input_list_path = os.path.join(
+                self.output_dir, f"temp_list_{uuid.uuid4().hex[:8]}.txt"
+            )
+
+            # Create temporary file list for FFmpeg concat
+            with open(input_list_path, "w") as f:
+                for segment_path in segment_paths:
+                    f.write(f"file '{os.path.abspath(segment_path)}'\n")
+
+            # FFmpeg command using concat demuxer
+            cmd = [
+                self.ffmpeg_path,
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                input_list_path,
+                "-c",
+                "copy",  # Copy streams without re-encoding for speed
+                "-movflags",
+                "+faststart",
+                output_path,
+            ]
+
+            logger.info(f"COMBINE: Running FFmpeg combine command")
+
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=1800
+            )  # 30 minutes max
+
+            if result.returncode != 0:
+                logger.error(
+                    f"COMBINE: FFmpeg failed with return code {result.returncode}"
+                )
+                logger.error(f"COMBINE: stderr: {result.stderr}")
+                raise RuntimeError(f"Failed to combine segments: {result.stderr}")
+
+            # Verify output file was created
+            if not os.path.exists(output_path):
+                logger.error(f"COMBINE: Output file not created: {output_path}")
+                raise RuntimeError("Combined video file was not created")
+
+            # Calculate combined video stats
+            output_size = os.path.getsize(output_path)
+            combined_duration = self._get_video_duration(output_path)
+
+            # Clean up temporary file list
+            try:
+                os.remove(input_list_path)
+            except:
+                pass
+
+            logger.info(
+                f"COMBINE: Successfully combined {len(segment_filenames)} segments"
+            )
+            logger.info(
+                f"COMBINE: Output file: {output_filename} ({output_size} bytes)"
+            )
+
+            return {
+                "success": True,
+                "message": f"Successfully combined {len(segment_filenames)} segments",
+                "output_file": output_filename,
+                "output_path": f"/outputs/{output_filename}",
+                "segments_combined": len(segment_filenames),
+                "combined_duration": round(combined_duration, 2),
+                "file_size_mb": round(output_size / (1024 * 1024), 2),
+            }
+
+        except subprocess.TimeoutExpired:
+            logger.error("COMBINE: Segment combining timed out")
+            raise RuntimeError("Segment combining timed out")
+        except Exception as e:
+            logger.error(f"COMBINE: Segment combining failed: {str(e)}")
+            raise RuntimeError(f"Segment combining failed: {str(e)}")
+        finally:
+            # Clean up temporary file list if it still exists
+            if "input_list_path" in locals() and os.path.exists(input_list_path):
+                try:
+                    os.remove(input_list_path)
+                except:
+                    pass
 
     def get_processing_status(self, task_id: str) -> Dict[str, Any]:
         """Get processing status for a task"""

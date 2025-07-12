@@ -2,6 +2,8 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
 from services.video_processor import VideoProcessor
 from utils.file_utils import save_upload_file, cleanup_file
+from pydantic import BaseModel
+from typing import List, Optional
 import os
 import traceback
 import logging
@@ -151,6 +153,75 @@ async def process_video(
             detail=f"An unexpected error occurred during video processing: {str(e)}",
         )
     # Note: Removed finally block - file cleanup only happens on success or error, not always
+
+
+# Request model for combining segments
+class CombineSegmentsRequest(BaseModel):
+    segment_filenames: List[str]
+    output_filename: Optional[str] = None
+
+
+@router.post("/combine-segments")
+async def combine_segments(request: CombineSegmentsRequest):
+    """
+    Combine selected segments into a new video file
+
+    Args:
+        request: Request containing segment filenames and optional output filename
+
+    Returns:
+        Combined video file information
+    """
+    start_time = datetime.now()
+
+    logger.info(f"COMBINE: Starting segment combination")
+    logger.info(f"COMBINE: Segments to combine: {request.segment_filenames}")
+    logger.info(f"COMBINE: Output filename: {request.output_filename}")
+
+    try:
+        # Validate request
+        if not request.segment_filenames:
+            logger.error("COMBINE: No segments provided")
+            raise HTTPException(
+                status_code=400, detail="No segments provided for combining"
+            )
+
+        # Combine segments using video processor
+        logger.info("COMBINE: Calling video processor to combine segments...")
+        combine_result = await processor.combine_selected_segments(
+            segment_filenames=request.segment_filenames,
+            output_filename=request.output_filename,
+        )
+
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.info(
+            f"COMBINE: Segment combination completed in {processing_time:.2f} seconds"
+        )
+
+        # Return combination results
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "Segments combined successfully",
+                "data": combine_result,
+            },
+        )
+
+    except ValueError as e:
+        logger.error(f"COMBINE: ValueError: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        logger.error(f"COMBINE: FileNotFoundError: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        # Log the full traceback for debugging
+        error_trace = traceback.format_exc()
+        logger.error(f"COMBINE: Unexpected error in segment combination: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred during segment combination: {str(e)}",
+        )
 
 
 @router.get("/process-video/status/{task_id}")

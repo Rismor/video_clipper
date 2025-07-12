@@ -11,10 +11,23 @@ import {
   AlertCircle,
   CheckCircle,
 } from "lucide-react";
+import SegmentSelector from "./SegmentSelector";
+import { combineSegments } from "@/lib/api";
 
 interface ProcessingSettings {
-  noiseThresholdPercent: number;
-  paddingDuration: number;
+  audioSensitivity: number;
+  mergeThreshold: number;
+}
+
+interface SegmentInfo {
+  segment_number: number;
+  filename: string;
+  path: string;
+  start_time: number;
+  end_time: number;
+  duration: number;
+  size_bytes: number;
+  size_mb: number;
 }
 
 interface ProcessingResult {
@@ -23,12 +36,14 @@ interface ProcessingResult {
   input_file: string;
   output_file: string;
   output_path: string;
+  segments: SegmentInfo[];
   settings: {
-    noise_threshold_percent: number;
-    padding_duration: number;
+    audio_sensitivity: number;
+    merge_threshold: number;
   };
   processing_stats: {
     hits_detected: number;
+    segments_saved: number;
     total_duration: string;
     montage_duration: string;
     compression_ratio: number;
@@ -53,28 +68,66 @@ export default function VideoProcessing({
   error,
 }: VideoProcessingProps) {
   const [settings, setSettings] = useState<ProcessingSettings>({
-    noiseThresholdPercent: 90.0,
-    paddingDuration: 2.0,
+    audioSensitivity: 0.3,
+    mergeThreshold: 0.8,
   });
+
+  // Segment combination state
+  const [isCombining, setIsCombining] = useState(false);
+  const [combinedResult, setCombinedResult] = useState<any>(null);
+  const [combineError, setCombineError] = useState<string | null>(null);
 
   const handleProcess = async () => {
     await onProcess(settings);
   };
 
-  const handleDownload = () => {
-    if (result?.output_path) {
+  const handleDownload = (filePath: string, fileName: string) => {
+    if (filePath) {
       // Construct the proper download URL
       const API_BASE_URL =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const downloadUrl = `${API_BASE_URL}${result.output_path}`;
+      const downloadUrl = `${API_BASE_URL}${filePath}`;
 
       // Create a download link
       const link = document.createElement("a");
       link.href = downloadUrl;
-      link.download = result.output_file;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+  };
+
+  const handleDownloadMontage = () => {
+    if (result?.output_path) {
+      handleDownload(result.output_path, result.output_file);
+    }
+  };
+
+  const handleDownloadCombined = () => {
+    if (combinedResult?.output_path) {
+      handleDownload(combinedResult.output_path, combinedResult.output_file);
+    }
+  };
+
+  const handleCombineSegments = async (selectedSegments: string[]) => {
+    setIsCombining(true);
+    setCombineError(null);
+    setCombinedResult(null);
+
+    try {
+      const response = await combineSegments(selectedSegments);
+      if (response.success) {
+        setCombinedResult(response.data);
+      } else {
+        setCombineError(response.message || "Failed to combine segments");
+      }
+    } catch (error) {
+      setCombineError(
+        error instanceof Error ? error.message : "Failed to combine segments"
+      );
+    } finally {
+      setIsCombining(false);
     }
   };
 
@@ -100,23 +153,23 @@ export default function VideoProcessing({
         </div>
 
         <div className="space-y-6">
-          {/* Noise Threshold */}
+          {/* Audio Sensitivity */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Noise Threshold: {settings.noiseThresholdPercent}%
+              Audio Sensitivity: {(settings.audioSensitivity * 100).toFixed(0)}%
             </label>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-500">0%</span>
               <input
                 type="range"
                 min="0"
-                max="100"
-                step="5"
-                value={settings.noiseThresholdPercent}
+                max="1"
+                step="0.05"
+                value={settings.audioSensitivity}
                 onChange={(e) =>
                   setSettings((prev) => ({
                     ...prev,
-                    noiseThresholdPercent: parseFloat(e.target.value),
+                    audioSensitivity: parseFloat(e.target.value),
                   }))
                 }
                 className="slider flex-1"
@@ -125,36 +178,36 @@ export default function VideoProcessing({
               <span className="text-sm text-gray-500">100%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Only keep audio above this percentage of your loudest hit
+              RMS energy threshold for detecting heavy bag hits
             </p>
           </div>
 
-          {/* Padding Duration */}
+          {/* Merge Threshold */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Padding Duration: {settings.paddingDuration.toFixed(2)}s
+              Merge Threshold: {settings.mergeThreshold.toFixed(2)}s
             </label>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">0.01s</span>
+              <span className="text-sm text-gray-500">0.1s</span>
               <input
                 type="range"
-                min="0.01"
-                max="10.0"
-                step="0.01"
-                value={settings.paddingDuration}
+                min="0.1"
+                max="5.0"
+                step="0.1"
+                value={settings.mergeThreshold}
                 onChange={(e) =>
                   setSettings((prev) => ({
                     ...prev,
-                    paddingDuration: parseFloat(e.target.value),
+                    mergeThreshold: parseFloat(e.target.value),
                   }))
                 }
                 className="slider flex-1"
                 disabled={isProcessing}
               />
-              <span className="text-sm text-gray-500">10.0s</span>
+              <span className="text-sm text-gray-500">5.0s</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              How much video to keep around each combo (split before/after)
+              How close segments can be to merge them together
             </p>
           </div>
 
@@ -243,7 +296,7 @@ export default function VideoProcessing({
             </div>
 
             <button
-              onClick={handleDownload}
+              onClick={handleDownloadMontage}
               className="btn-primary flex items-center space-x-2"
             >
               <Download className="w-5 h-5" />
@@ -359,19 +412,103 @@ export default function VideoProcessing({
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Noise Threshold:</span>
+                <span className="text-sm text-gray-600">
+                  Audio Sensitivity:
+                </span>
                 <span className="text-sm font-medium text-gray-800">
-                  {result.settings.noise_threshold_percent}%
+                  {(result.settings.audio_sensitivity * 100).toFixed(0)}%
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Padding Duration:</span>
+                <span className="text-sm text-gray-600">Merge Threshold:</span>
                 <span className="text-sm font-medium text-gray-800">
-                  {result.settings.padding_duration}s
+                  {result.settings.merge_threshold}s
                 </span>
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Segment Selector */}
+      {result && result.segments && result.segments.length > 0 && (
+        <SegmentSelector
+          segments={result.segments}
+          onCombineSelected={handleCombineSegments}
+          isProcessing={isCombining}
+        />
+      )}
+
+      {/* Combined Result Display */}
+      {combinedResult && (
+        <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-800">
+                Custom Combo Ready
+              </h3>
+            </div>
+
+            <button
+              onClick={handleDownloadCombined}
+              className="btn-primary flex items-center space-x-2"
+            >
+              <Download className="w-5 h-5" />
+              <span>Download</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Output File:</span>
+                <span className="text-sm font-medium text-gray-800">
+                  {combinedResult.output_file}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">
+                  Segments Combined:
+                </span>
+                <span className="text-sm font-medium text-gray-800">
+                  {combinedResult.segments_combined}
+                </span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Duration:</span>
+                <span className="text-sm font-medium text-gray-800">
+                  {combinedResult.combined_duration}s
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">File Size:</span>
+                <span className="text-sm font-medium text-gray-800">
+                  {combinedResult.file_size_mb} MB
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Combine Error Display */}
+      {combineError && (
+        <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <AlertCircle className="w-6 h-6 text-red-500" />
+            <h3 className="text-lg font-semibold text-red-700">
+              Combination Failed
+            </h3>
+          </div>
+          <p className="text-red-600 mb-4">{combineError}</p>
+          <p className="text-gray-500 text-sm">
+            Please try selecting different segments or try again.
+          </p>
         </div>
       )}
     </div>
