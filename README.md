@@ -7,7 +7,7 @@ Automatically create epic montages from your kickboxing training videos by cutti
 - **Smart Audio Analysis**: Automatically detects punch sequences vs silence
 - **Drag & Drop Interface**: Simple web interface for uploading videos
 - **Configurable Settings**: Adjust silence threshold and audio sensitivity
-- **High-Quality Output**: Maintains original video quality in MP4 format
+- **Multi-Format Support**: Accepts MP4, MAV, MOV, AVI inputs and outputs clean MP4
 - **Continuous Montage**: Stitches all active sequences into one epic video
 
 ## Prerequisites
@@ -16,7 +16,8 @@ Before you start, make sure you have:
 
 1. **Python 3.8+** installed
 2. **FFmpeg** installed and available in your system PATH
-3. At least 2GB of free disk space for processing
+3. At least 20GB of free disk space for processing large files
+4. **Patience** - Large files (5GB+) may take 15-30 minutes to process
 
 ### Installing FFmpeg
 
@@ -66,7 +67,7 @@ sudo apt install ffmpeg
 
 ## How to Use
 
-1. **Upload Video**: Drag and drop your kickboxing training video (MP4 format)
+1. **Upload Video**: Drag and drop your kickboxing training video (MP4, MAV, MOV, AVI formats)
 2. **Adjust Settings**:
    - **Silence Threshold**: How long silence before cutting (default: 0.8s)
    - **Audio Sensitivity**: How sensitive to detect sounds (default: 0.3)
@@ -107,9 +108,11 @@ sudo apt install ffmpeg
 
 ### Processing takes too long
 
-- Large videos (>100MB) may take several minutes
-- Check your available disk space
+- Large videos (>1GB) may take 15-30 minutes
+- Very large videos (>5GB) may take 30-60 minutes
+- Check your available disk space (need ~3x the video size free)
 - Close other applications to free up memory
+- Don't close the browser tab - let it run in the background
 
 ### Poor quality output
 

@@ -19,7 +19,7 @@ CORS(app)
 # Configuration
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "outputs"
-MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB
+MAX_CONTENT_LENGTH = 12 * 1024 * 1024 * 1024  # 12GB
 
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
@@ -192,13 +192,25 @@ def process_video():
         silence_threshold = float(request.form.get("silence_threshold", 0.8))
         audio_sensitivity = float(request.form.get("audio_sensitivity", 0.3))
 
+        # Log file info with size warning
+        file_size_mb = file.content_length / 1024 / 1024 if file.content_length else 0
+        file_size_gb = file_size_mb / 1024
+
         logger.info(f"Processing video: {file.filename}")
+        logger.info(f"File size: {file_size_gb:.2f} GB ({file_size_mb:.2f} MB)")
+        if file_size_gb > 1:
+            logger.info("⚠️ Large file detected - processing may take 15-30 minutes")
         logger.info(f"Silence threshold: {silence_threshold}s")
         logger.info(f"Audio sensitivity: {audio_sensitivity}")
 
         # Create temporary filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        temp_video = os.path.join(UPLOAD_FOLDER, f"temp_{timestamp}.mp4")
+        # Keep original extension for temp file to ensure proper handling
+        filename = file.filename or "video"
+        file_extension = os.path.splitext(filename)[1].lower()
+        if file_extension not in [".mp4", ".mav", ".mov", ".avi"]:
+            file_extension = ".mp4"  # Default fallback
+        temp_video = os.path.join(UPLOAD_FOLDER, f"temp_{timestamp}{file_extension}")
         output_video = os.path.join(OUTPUT_FOLDER, f"montage_{timestamp}.mp4")
 
         # Save uploaded file
@@ -209,6 +221,19 @@ def process_video():
             logger.info("Extracting audio...")
             video_clip = VideoFileClip(temp_video)
             temp_audio = os.path.join(UPLOAD_FOLDER, f"temp_audio_{timestamp}.wav")
+
+            # Check if video has audio
+            if video_clip.audio is None:
+                video_clip.close()
+                return (
+                    jsonify(
+                        {
+                            "error": "Video has no audio track! Cannot process without audio."
+                        }
+                    ),
+                    400,
+                )
+
             video_clip.audio.write_audiofile(temp_audio, verbose=False, logger=None)
             video_clip.close()
 

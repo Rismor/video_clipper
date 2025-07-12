@@ -45,28 +45,40 @@ videoInput.addEventListener("change", (e) => {
 
 // Handle file selection
 function handleFileSelect(file) {
-  if (!file.type.startsWith("video/")) {
-    alert("Please select a video file! 🎬");
+  // Accept video files or MAV files (which might not have proper MIME type)
+  if (
+    !file.type.startsWith("video/") &&
+    !file.name.toLowerCase().endsWith(".mav")
+  ) {
+    alert("Please select a video file (MP4, MAV, etc.)! 🎬");
     return;
   }
 
-  if (file.size > 500 * 1024 * 1024) {
-    // 500MB limit
-    alert("File is too large! Please select a video smaller than 500MB. 📏");
+  if (file.size > 12 * 1024 * 1024 * 1024) {
+    // 12GB limit
+    alert("File is too large! Please select a video smaller than 12GB. 📏");
     return;
   }
 
   selectedFile = file;
 
-  // Update UI
+  // Update UI with size warning for large files
+  const sizeInMB = file.size / 1024 / 1024;
+  const sizeInGB = sizeInMB / 1024;
+  const sizeText =
+    sizeInGB > 1 ? `${sizeInGB.toFixed(2)} GB` : `${sizeInMB.toFixed(2)} MB`;
+  const warningText =
+    sizeInGB > 1
+      ? `<p class="help-text" style="color: #ff9800;">⚠️ Large file - processing may take 10-30 minutes!</p>`
+      : "";
+
   dropZone.innerHTML = `
         <div class="drop-zone-content">
             <div class="upload-icon">✅</div>
             <h3>Video Selected!</h3>
             <p>${file.name}</p>
-            <p class="help-text">Size: ${(file.size / 1024 / 1024).toFixed(
-              2
-            )} MB</p>
+            <p class="help-text">Size: ${sizeText}</p>
+            ${warningText}
         </div>
     `;
 
@@ -121,14 +133,24 @@ async function processVideo(file, silenceThreshold, audioSensitivity) {
     }
     progressFill.style.width = progress + "%";
 
-    if (progress < 30) {
-      progressText.textContent = "Analyzing audio patterns... 🎵";
-    } else if (progress < 60) {
+    const isLargeFile = file.size > 1024 * 1024 * 1024; // 1GB+
+
+    if (progress < 20) {
+      progressText.textContent = isLargeFile
+        ? "Processing large file... This may take a while 🎵"
+        : "Analyzing audio patterns... 🎵";
+    } else if (progress < 40) {
       progressText.textContent = "Detecting punch sequences... 🥊";
+    } else if (progress < 65) {
+      progressText.textContent = isLargeFile
+        ? "Cutting out silence... Almost there! ✂️"
+        : "Cutting out silence... ✂️";
     } else if (progress < 85) {
-      progressText.textContent = "Cutting out silence... ✂️";
-    } else {
       progressText.textContent = "Creating your epic montage... 🎬";
+    } else {
+      progressText.textContent = isLargeFile
+        ? "Finalizing your montage... Patience pays off! 🎯"
+        : "Almost done... 🎉";
     }
   }, 500);
 
@@ -173,7 +195,13 @@ async function processVideo(file, silenceThreshold, audioSensitivity) {
 // Add some nice UX touches
 document.addEventListener("DOMContentLoaded", () => {
   // Add file type validation
-  const fileTypes = ["video/mp4", "video/mov", "video/avi", "video/wmv"];
+  const fileTypes = [
+    "video/mp4",
+    "video/mov",
+    "video/avi",
+    "video/wmv",
+    ".mav",
+  ];
 
   // Update sensitivity display
   const sensitivityInput = document.getElementById("audioSensitivity");
