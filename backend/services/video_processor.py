@@ -98,10 +98,29 @@ class VideoProcessor:
             logger.info(f"NOISE_GATE: Found maximum peak at {max_peak_db} dB")
 
             # Calculate threshold based on percentage
-            # Convert percentage to dB threshold
-            threshold_db = max_peak_db - (20 * (1 - noise_threshold_percent / 100))
+            # Use a proper dynamic range calculation
+            # Assume noise floor is around -80 dB below peak
+            noise_floor_db = max_peak_db - 80
+            dynamic_range = max_peak_db - noise_floor_db
+
+            # Calculate threshold as percentage from peak towards noise floor
+            threshold_offset = dynamic_range * (noise_threshold_percent / 100)
+            threshold_db = max_peak_db - threshold_offset
+
+            # Safeguard: ensure threshold is at least 10 dB below peak
+            # This prevents cases where the threshold is too close to the peak
+            min_threshold_db = max_peak_db - 10
+            if threshold_db > min_threshold_db:
+                logger.warning(
+                    f"NOISE_GATE: Threshold {threshold_db:.1f} dB too close to peak, using {min_threshold_db:.1f} dB instead"
+                )
+                threshold_db = min_threshold_db
+
             logger.info(
-                f"NOISE_GATE: Using threshold of {threshold_db} dB ({noise_threshold_percent}% of peak)"
+                f"NOISE_GATE: Peak: {max_peak_db} dB, Noise floor: {noise_floor_db} dB"
+            )
+            logger.info(
+                f"NOISE_GATE: Using threshold of {threshold_db:.1f} dB ({noise_threshold_percent}% from peak)"
             )
 
             # Step 2: Detect silence segments (gaps longer than padding_duration)
@@ -123,6 +142,14 @@ class VideoProcessor:
             result = subprocess.run(
                 detect_cmd, capture_output=True, text=True, timeout=300
             )
+
+            # Debug: Log the silence detection output
+            logger.info("NOISE_GATE: Silence detection output:")
+            silence_lines = [
+                line for line in result.stderr.split("\n") if "silence" in line.lower()
+            ]
+            for line in silence_lines:
+                logger.info(f"  {line}")
 
             # Parse silence detection output
             silence_segments = []
@@ -146,23 +173,47 @@ class VideoProcessor:
                     except (ValueError, IndexError):
                         continue
 
+            logger.info(
+                f"NOISE_GATE: Found {len(silence_segments)} raw silence segments"
+            )
+            for i, (start, end) in enumerate(silence_segments):
+                logger.info(
+                    f"  Silence {i+1}: {start:.2f}s - {end:.2f}s ({end-start:.2f}s)"
+                )
+
             # Get video duration
             duration = self._get_video_duration(file_path)
+            logger.info(f"NOISE_GATE: Video duration: {duration:.2f}s")
 
             # Convert silence segments to combo segments
             # Everything that's NOT silent for more than padding_duration is a combo
             combo_segments = []
             last_end = 0.0
 
-            for silence_start, silence_end in silence_segments:
+            logger.info("NOISE_GATE: Converting silence segments to combo segments...")
+            for i, (silence_start, silence_end) in enumerate(silence_segments):
                 # Add combo segment before this silence
                 if silence_start > last_end:
                     combo_segments.append((last_end, silence_start))
+                    logger.info(
+                        f"  Added combo: {last_end:.2f}s - {silence_start:.2f}s (before silence {i+1})"
+                    )
+                else:
+                    logger.info(
+                        f"  Skipped combo before silence {i+1}: no gap ({last_end:.2f}s >= {silence_start:.2f}s)"
+                    )
                 last_end = silence_end
 
             # Add final combo segment if there's time left
             if last_end < duration:
                 combo_segments.append((last_end, duration))
+                logger.info(f"  Added final combo: {last_end:.2f}s - {duration:.2f}s")
+            else:
+                logger.info(
+                    f"  No final combo needed: {last_end:.2f}s >= {duration:.2f}s"
+                )
+
+            logger.info(f"NOISE_GATE: Created {len(combo_segments)} raw combo segments")
 
             # Step 3: Add padding around combo segments
             padded_segments = []
