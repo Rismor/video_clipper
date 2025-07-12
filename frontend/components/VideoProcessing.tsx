@@ -13,8 +13,8 @@ import {
 } from "lucide-react";
 
 interface ProcessingSettings {
-  silenceThreshold: number;
-  audioSensitivity: number;
+  noiseThresholdPercent: number;
+  paddingDuration: number;
 }
 
 interface ProcessingResult {
@@ -23,12 +23,16 @@ interface ProcessingResult {
   input_file: string;
   output_file: string;
   output_path: string;
-  settings: ProcessingSettings;
+  settings: {
+    noise_threshold_percent: number;
+    padding_duration: number;
+  };
   processing_stats: {
-    segments_found: number;
+    hits_detected: number;
     total_duration: string;
-    processed_duration: string;
+    montage_duration: string;
     compression_ratio: number;
+    time_saved: string;
   };
   note?: string;
 }
@@ -49,8 +53,8 @@ export default function VideoProcessing({
   error,
 }: VideoProcessingProps) {
   const [settings, setSettings] = useState<ProcessingSettings>({
-    silenceThreshold: 0.8,
-    audioSensitivity: 0.3,
+    noiseThresholdPercent: 90.0,
+    paddingDuration: 2.0,
   });
 
   const handleProcess = async () => {
@@ -78,66 +82,66 @@ export default function VideoProcessing({
             <Settings className="w-6 h-6 text-primary-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-800">
-            Processing Settings
+            Heavy Bag Processing Settings
           </h2>
         </div>
 
         <div className="space-y-6">
-          {/* Silence Threshold */}
+          {/* Noise Threshold */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Silence Threshold: {settings.silenceThreshold}s
+              Noise Threshold: {settings.noiseThresholdPercent}%
             </label>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">0.1s</span>
+              <span className="text-sm text-gray-500">50%</span>
               <input
                 type="range"
-                min="0.1"
-                max="5.0"
-                step="0.1"
-                value={settings.silenceThreshold}
+                min="50"
+                max="99"
+                step="1"
+                value={settings.noiseThresholdPercent}
                 onChange={(e) =>
                   setSettings((prev) => ({
                     ...prev,
-                    silenceThreshold: parseFloat(e.target.value),
+                    noiseThresholdPercent: parseFloat(e.target.value),
                   }))
                 }
                 className="slider flex-1"
                 disabled={isProcessing}
               />
-              <span className="text-sm text-gray-500">5.0s</span>
+              <span className="text-sm text-gray-500">99%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Minimum duration of silence to detect segment boundaries
+              Only keep audio above this percentage of your loudest hit
             </p>
           </div>
 
-          {/* Audio Sensitivity */}
+          {/* Padding Duration */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Audio Sensitivity: {Math.round(settings.audioSensitivity * 100)}%
+              Padding Duration: {settings.paddingDuration}s
             </label>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">10%</span>
+              <span className="text-sm text-gray-500">0.5s</span>
               <input
                 type="range"
-                min="0.1"
-                max="1.0"
-                step="0.1"
-                value={settings.audioSensitivity}
+                min="0.5"
+                max="10.0"
+                step="0.5"
+                value={settings.paddingDuration}
                 onChange={(e) =>
                   setSettings((prev) => ({
                     ...prev,
-                    audioSensitivity: parseFloat(e.target.value),
+                    paddingDuration: parseFloat(e.target.value),
                   }))
                 }
                 className="slider flex-1"
                 disabled={isProcessing}
               />
-              <span className="text-sm text-gray-500">100%</span>
+              <span className="text-sm text-gray-500">10.0s</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Sensitivity to audio changes when detecting active segments
+              How much video to keep around each combo (split before/after)
             </p>
           </div>
 
@@ -163,7 +167,7 @@ export default function VideoProcessing({
               ) : (
                 <div className="flex items-center space-x-2">
                   <Play className="w-5 h-5" />
-                  <span>Create Montage</span>
+                  <span>Create Heavy Bag Montage</span>
                 </div>
               )}
             </button>
@@ -177,7 +181,7 @@ export default function VideoProcessing({
           <div className="flex items-center space-x-3 mb-4">
             <Settings className="w-6 h-6 text-primary-500 animate-spin" />
             <h3 className="text-lg font-semibold text-gray-800">
-              Processing Video
+              Processing Heavy Bag Video
             </h3>
           </div>
 
@@ -190,7 +194,7 @@ export default function VideoProcessing({
             </div>
             <div className="flex justify-between text-sm text-gray-600">
               <span>Progress: {progress}%</span>
-              <span className="loading-dots">Analyzing audio segments</span>
+              <span className="loading-dots">Detecting heavy bag combos</span>
             </div>
           </div>
         </div>
@@ -270,9 +274,9 @@ export default function VideoProcessing({
 
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Segments Found:</span>
+                  <span className="text-gray-600">Combos Detected:</span>
                   <span className="font-medium">
-                    {result.processing_stats.segments_found}
+                    {result.processing_stats.hits_detected}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -282,9 +286,15 @@ export default function VideoProcessing({
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Processed Duration:</span>
+                  <span className="text-gray-600">Montage Duration:</span>
                   <span className="font-medium">
-                    {result.processing_stats.processed_duration}
+                    {result.processing_stats.montage_duration}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Time Saved:</span>
+                  <span className="font-medium">
+                    {result.processing_stats.time_saved}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -309,14 +319,13 @@ export default function VideoProcessing({
               <div className="flex items-center space-x-2">
                 <Clock className="w-4 h-4 text-gray-500" />
                 <span className="text-sm text-gray-600">
-                  Silence Threshold: {result.settings.silenceThreshold}s
+                  Noise Threshold: {result.settings.noise_threshold_percent}%
                 </span>
               </div>
               <div className="flex items-center space-x-2">
                 <Film className="w-4 h-4 text-gray-500" />
                 <span className="text-sm text-gray-600">
-                  Audio Sensitivity:{" "}
-                  {Math.round(result.settings.audioSensitivity * 100)}%
+                  Padding Duration: {result.settings.padding_duration}s
                 </span>
               </div>
             </div>

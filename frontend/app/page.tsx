@@ -43,14 +43,15 @@ interface ProcessingResult {
   output_file: string;
   output_path: string;
   settings: {
-    silenceThreshold: number;
-    audioSensitivity: number;
+    noise_threshold_percent: number;
+    padding_duration: number;
   };
   processing_stats: {
-    segments_found: number;
+    hits_detected: number;
     total_duration: string;
-    processed_duration: string;
+    montage_duration: string;
     compression_ratio: number;
+    time_saved: string;
   };
   note?: string;
 }
@@ -126,8 +127,8 @@ export default function Home() {
 
   // Handle video processing
   const handleProcess = async (settings: {
-    silenceThreshold: number;
-    audioSensitivity: number;
+    noiseThresholdPercent: number;
+    paddingDuration: number;
   }) => {
     if (!selectedFile) return;
 
@@ -189,10 +190,11 @@ export default function Home() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Video Clipper
+            Heavy Bag Video Clipper
           </h1>
           <p className="text-xl text-gray-600">
-            Analyze and process your videos with ease
+            Analyze your videos and create combo montages of your heavy bag
+            training
           </p>
 
           {/* Server Status */}
@@ -256,7 +258,7 @@ export default function Home() {
               `}
             >
               <FileVideo className="w-5 h-5" />
-              <span>Process Video</span>
+              <span>Create Heavy Bag Montage</span>
             </button>
           </div>
         </div>
@@ -289,7 +291,7 @@ export default function Home() {
                   <p className="text-sm text-gray-600">
                     Mode:{" "}
                     <span className="font-medium">
-                      {mode === "analyze" ? "Analysis" : "Processing"}
+                      {mode === "analyze" ? "Analysis" : "Heavy Bag Montage"}
                     </span>
                   </p>
                 </div>

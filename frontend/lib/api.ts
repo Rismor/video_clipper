@@ -28,15 +28,18 @@ export const analyzeVideo = async (file: File) => {
   }
 };
 
-// Video Processing API
+// Heavy Bag Video Processing API
 export const processVideo = async (
   file: File,
-  settings: { silenceThreshold: number; audioSensitivity: number }
+  settings: { noiseThresholdPercent: number; paddingDuration: number }
 ) => {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("silence_threshold", settings.silenceThreshold.toString());
-  formData.append("audio_sensitivity", settings.audioSensitivity.toString());
+  formData.append(
+    "noise_threshold_percent",
+    settings.noiseThresholdPercent.toString()
+  );
+  formData.append("padding_duration", settings.paddingDuration.toString());
 
   try {
     const response = await api.post("/api/process-video", formData);
@@ -44,7 +47,7 @@ export const processVideo = async (
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.detail || "Failed to process video"
+        error.response?.data?.detail || "Failed to process heavy bag video"
       );
     }
     throw new Error("An unexpected error occurred");

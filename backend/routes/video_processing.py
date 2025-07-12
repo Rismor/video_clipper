@@ -24,26 +24,28 @@ processor = VideoProcessor()
 @router.post("/process-video")
 async def process_video(
     file: UploadFile = File(...),
-    silence_threshold: float = Form(0.8),
-    audio_sensitivity: float = Form(0.3),
+    noise_threshold_percent: float = Form(90.0),
+    padding_duration: float = Form(2.0),
 ):
     """
-    Process uploaded video file to create montage (BOILERPLATE ONLY)
+    Process uploaded heavy bag training video to create montage of hits
 
     Args:
         file: Video file to process
-        silence_threshold: Silence threshold in seconds (0.1-5.0, default 0.8)
-        audio_sensitivity: Audio sensitivity (0.1-1.0, default 0.3)
+        noise_threshold_percent: Noise gate threshold as percentage of peak (50-99%, default 90%)
+        padding_duration: How much video to keep around each hit in seconds (0.5-10.0, default 2.0)
 
     Returns:
-        Processing results (mock data for now)
+        Processing results with heavy bag montage
     """
     file_path = None
     start_time = datetime.now()
 
-    logger.info(f"PROCESS: Starting video processing for file: {file.filename}")
     logger.info(
-        f"PARAMS: Parameters - silence_threshold: {silence_threshold}, audio_sensitivity: {audio_sensitivity}"
+        f"PROCESS: Starting heavy bag video processing for file: {file.filename}"
+    )
+    logger.info(
+        f"PARAMS: Parameters - noise_threshold_percent: {noise_threshold_percent}%, padding_duration: {padding_duration}s"
     )
     logger.info(
         f"SIZE: File size: {file.size} bytes"
@@ -54,17 +56,18 @@ async def process_video(
     try:
         # Validate parameters
         logger.info("VALIDATE: Validating parameters...")
-        if not (0.1 <= silence_threshold <= 5.0):
-            logger.error(f"ERROR: Invalid silence threshold: {silence_threshold}")
+        if not (50.0 <= noise_threshold_percent <= 99.0):
+            logger.error(f"ERROR: Invalid noise threshold: {noise_threshold_percent}%")
             raise HTTPException(
                 status_code=400,
-                detail="Silence threshold must be between 0.1 and 5.0 seconds",
+                detail="Noise threshold must be between 50% and 99%",
             )
 
-        if not (0.1 <= audio_sensitivity <= 1.0):
-            logger.error(f"ERROR: Invalid audio sensitivity: {audio_sensitivity}")
+        if not (0.5 <= padding_duration <= 10.0):
+            logger.error(f"ERROR: Invalid padding duration: {padding_duration}s")
             raise HTTPException(
-                status_code=400, detail="Audio sensitivity must be between 0.1 and 1.0"
+                status_code=400,
+                detail="Padding duration must be between 0.5 and 10.0 seconds",
             )
 
         # Save uploaded file
@@ -80,12 +83,12 @@ async def process_video(
         file_size = os.path.getsize(file_path)
         logger.info(f"SIZE: Saved file size: {file_size} bytes")
 
-        # Process video (boilerplate only)
-        logger.info("PROCESS: Starting video processing...")
+        # Process heavy bag video
+        logger.info("PROCESS: Starting heavy bag video processing...")
         processing_result = await processor.process_video(
             file_path=file_path,
-            silence_threshold=silence_threshold,
-            audio_sensitivity=audio_sensitivity,
+            noise_threshold_percent=noise_threshold_percent,
+            padding_duration=padding_duration,
         )
 
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -109,7 +112,7 @@ async def process_video(
             status_code=200,
             content={
                 "success": True,
-                "message": "Video processing completed (BOILERPLATE RESPONSE)",
+                "message": "Heavy bag video processing completed successfully",
                 "data": processing_result,
             },
         )
