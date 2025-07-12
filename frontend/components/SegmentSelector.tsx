@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Play, Download, Settings } from "lucide-react";
+import { getApiUrl } from "@/lib/api";
 
 interface SegmentInfo {
   segment_number: number;
@@ -58,8 +59,7 @@ export default function SegmentSelector({
 
   // Get the proper video URL for playback
   const getVideoUrl = (path: string) => {
-    const API_BASE_URL =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const API_BASE_URL = getApiUrl();
     return `${API_BASE_URL}${path}`;
   };
 

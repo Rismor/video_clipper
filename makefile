@@ -32,17 +32,19 @@ install:
 # Development - run both services
 dev:
 	@echo "🔥 Starting development servers..."
-	@echo "Backend will run on: http://localhost:8000"
-	@echo "Frontend will run on: http://localhost:3000"
+	@echo "Backend will run on: http://localhost:8000 and http://192.168.1.106:8000"
+	@echo "Frontend will run on: http://localhost:3000 and http://192.168.1.106:3000"
 	@echo "Press Ctrl+C to stop both servers"
 	@start cmd /c "cd backend && python main.py"
-	@cd frontend && npm run dev
+	@cd frontend && npx.cmd next dev -H 0.0.0.0 -p 3000
 
 # Frontend development server
 frontend:
 	@echo "🎨 Starting frontend development server..."
-	@echo "Frontend will run on: http://localhost:3000"
-	cd frontend && npm.cmd run dev
+	@echo "Frontend will run on:"
+	@echo "  Local:   http://localhost:3000"
+	@echo "  LAN:     http://192.168.1.106:3000"
+	cd frontend && npx.cmd next dev -H 0.0.0.0 -p 3000
 
 # Backend development server  
 backend:

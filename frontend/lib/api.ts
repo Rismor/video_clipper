@@ -1,14 +1,34 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Dynamic API URL based on current host
+const getApiBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    console.log("🔧 Using API URL from env:", process.env.NEXT_PUBLIC_API_URL);
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
 
-// Create axios instance with base configuration
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "multipart/form-data",
-  },
-});
+  // If running in browser, use the same host as the frontend
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const apiUrl = `http://${host}:8000`;
+    console.log("🌐 Dynamic API URL:", apiUrl, "from hostname:", host);
+    return apiUrl;
+  }
+
+  // Fallback for server-side rendering
+  console.log("🔧 Using localhost fallback (server-side)");
+  return "http://localhost:8000";
+};
+
+// Create axios instance with dynamic base URL
+const createApiInstance = () => {
+  return axios.create({
+    baseURL: getApiBaseUrl(),
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+};
 
 // Video Analysis API
 export const analyzeVideo = async (file: File) => {
@@ -16,6 +36,7 @@ export const analyzeVideo = async (file: File) => {
   formData.append("file", file);
 
   try {
+    const api = createApiInstance();
     const response = await api.post("/api/analyze-video", formData);
     return response.data;
   } catch (error) {
@@ -39,6 +60,7 @@ export const processVideo = async (
   formData.append("merge_threshold", settings.mergeThreshold.toString());
 
   try {
+    const api = createApiInstance();
     const response = await api.post("/api/process-video", formData);
     return response.data;
   } catch (error) {
@@ -57,6 +79,7 @@ export const combineSegments = async (
   outputFilename?: string
 ) => {
   try {
+    const api = createApiInstance();
     const response = await api.post(
       "/api/combine-segments",
       {
@@ -83,6 +106,7 @@ export const combineSegments = async (
 // Health Check APIs
 export const checkAnalysisHealth = async () => {
   try {
+    const api = createApiInstance();
     const response = await api.get("/api/analyze-video/health");
     return response.data;
   } catch (error) {
@@ -97,6 +121,7 @@ export const checkAnalysisHealth = async () => {
 
 export const checkProcessingHealth = async () => {
   try {
+    const api = createApiInstance();
     const response = await api.get("/api/process-video/health");
     return response.data;
   } catch (error) {
@@ -112,6 +137,7 @@ export const checkProcessingHealth = async () => {
 // General health check
 export const checkServerHealth = async () => {
   try {
+    const api = createApiInstance();
     const response = await api.get("/health");
     return response.data;
   } catch (error) {
@@ -121,3 +147,6 @@ export const checkServerHealth = async () => {
     throw new Error("An unexpected error occurred");
   }
 };
+
+// Export the URL function for use in components
+export const getApiUrl = getApiBaseUrl;

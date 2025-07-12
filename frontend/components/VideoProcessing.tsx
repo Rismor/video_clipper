@@ -12,7 +12,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import SegmentSelector from "./SegmentSelector";
-import { combineSegments } from "@/lib/api";
+import { combineSegments, getApiUrl } from "@/lib/api";
 
 interface ProcessingSettings {
   audioSensitivity: number;
@@ -84,8 +84,7 @@ export default function VideoProcessing({
   const handleDownload = (filePath: string, fileName: string) => {
     if (filePath) {
       // Construct the proper download URL
-      const API_BASE_URL =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const API_BASE_URL = getApiUrl();
       const downloadUrl = `${API_BASE_URL}${filePath}`;
 
       // Create a download link
@@ -134,8 +133,7 @@ export default function VideoProcessing({
   // Get the proper video URL for playback
   const getVideoUrl = () => {
     if (!result?.output_path) return undefined;
-    const API_BASE_URL =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const API_BASE_URL = getApiUrl();
     return `${API_BASE_URL}${result.output_path}`;
   };
 
