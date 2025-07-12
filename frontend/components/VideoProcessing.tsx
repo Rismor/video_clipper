@@ -68,7 +68,7 @@ export default function VideoProcessing({
   error,
 }: VideoProcessingProps) {
   const [settings, setSettings] = useState<ProcessingSettings>({
-    audioSensitivity: 0.3,
+    audioSensitivity: 0.35,
     mergeThreshold: 0.8,
   });
 
