@@ -41,45 +41,47 @@ async def process_video(
     file_path = None
     start_time = datetime.now()
 
-    logger.info(f"🎬 Starting video processing for file: {file.filename}")
+    logger.info(f"PROCESS: Starting video processing for file: {file.filename}")
     logger.info(
-        f"📊 Parameters - silence_threshold: {silence_threshold}, audio_sensitivity: {audio_sensitivity}"
+        f"PARAMS: Parameters - silence_threshold: {silence_threshold}, audio_sensitivity: {audio_sensitivity}"
     )
     logger.info(
-        f"📁 File size: {file.size} bytes" if file.size else "📁 File size: Unknown"
+        f"SIZE: File size: {file.size} bytes"
+        if file.size
+        else "SIZE: File size: Unknown"
     )
 
     try:
         # Validate parameters
-        logger.info("✅ Validating parameters...")
+        logger.info("VALIDATE: Validating parameters...")
         if not (0.1 <= silence_threshold <= 5.0):
-            logger.error(f"❌ Invalid silence threshold: {silence_threshold}")
+            logger.error(f"ERROR: Invalid silence threshold: {silence_threshold}")
             raise HTTPException(
                 status_code=400,
                 detail="Silence threshold must be between 0.1 and 5.0 seconds",
             )
 
         if not (0.1 <= audio_sensitivity <= 1.0):
-            logger.error(f"❌ Invalid audio sensitivity: {audio_sensitivity}")
+            logger.error(f"ERROR: Invalid audio sensitivity: {audio_sensitivity}")
             raise HTTPException(
                 status_code=400, detail="Audio sensitivity must be between 0.1 and 1.0"
             )
 
         # Save uploaded file
-        logger.info("💾 Saving uploaded file...")
+        logger.info("SAVE: Saving uploaded file...")
         file_path = await save_upload_file(file)
-        logger.info(f"✅ File saved to: {file_path}")
+        logger.info(f"SUCCESS: File saved to: {file_path}")
 
         # Verify file exists after save
         if not os.path.exists(file_path):
-            logger.error(f"❌ File not found after save: {file_path}")
+            logger.error(f"ERROR: File not found after save: {file_path}")
             raise FileNotFoundError(f"File was not saved properly: {file_path}")
 
         file_size = os.path.getsize(file_path)
-        logger.info(f"📊 Saved file size: {file_size} bytes")
+        logger.info(f"SIZE: Saved file size: {file_size} bytes")
 
         # Process video (boilerplate only)
-        logger.info("🎞️ Starting video processing...")
+        logger.info("PROCESS: Starting video processing...")
         processing_result = await processor.process_video(
             file_path=file_path,
             silence_threshold=silence_threshold,
@@ -87,18 +89,20 @@ async def process_video(
         )
 
         processing_time = (datetime.now() - start_time).total_seconds()
-        logger.info(f"✅ Video processing completed in {processing_time:.2f} seconds")
+        logger.info(
+            f"SUCCESS: Video processing completed in {processing_time:.2f} seconds"
+        )
 
         # Clean up uploaded file after successful processing
         if file_path and os.path.exists(file_path):
             logger.info(
-                f"🧹 Cleaning up original file after successful processing: {file_path}"
+                f"CLEANUP: Cleaning up original file after successful processing: {file_path}"
             )
             cleanup_success = cleanup_file(file_path)
             if cleanup_success:
-                logger.info("✅ Original file cleanup completed")
+                logger.info("SUCCESS: Original file cleanup completed")
             else:
-                logger.warning("⚠️ Original file cleanup failed")
+                logger.warning("WARNING: Original file cleanup failed")
 
         # Return processing results
         return JSONResponse(
@@ -111,29 +115,33 @@ async def process_video(
         )
 
     except ValueError as e:
-        logger.error(f"❌ ValueError: {str(e)}")
+        logger.error(f"ERROR: ValueError: {str(e)}")
         # Clean up file on error
         if file_path and os.path.exists(file_path):
-            logger.info(f"🧹 Cleaning up file after ValueError: {file_path}")
+            logger.info(f"CLEANUP: Cleaning up file after ValueError: {file_path}")
             cleanup_file(file_path)
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
-        logger.error(f"❌ FileNotFoundError: {str(e)}")
-        logger.error(f"❌ File path was: {file_path}")
+        logger.error(f"ERROR: FileNotFoundError: {str(e)}")
+        logger.error(f"ERROR: File path was: {file_path}")
         if file_path:
-            logger.error(f"❌ File exists check: {os.path.exists(file_path)}")
+            logger.error(f"ERROR: File exists check: {os.path.exists(file_path)}")
         # Clean up file on error
         if file_path and os.path.exists(file_path):
-            logger.info(f"🧹 Cleaning up file after FileNotFoundError: {file_path}")
+            logger.info(
+                f"CLEANUP: Cleaning up file after FileNotFoundError: {file_path}"
+            )
             cleanup_file(file_path)
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         # Log the full traceback for debugging
         error_trace = traceback.format_exc()
-        logger.error(f"❌ Unexpected error in video processing: {error_trace}")
+        logger.error(f"ERROR: Unexpected error in video processing: {error_trace}")
         # Clean up file on error
         if file_path and os.path.exists(file_path):
-            logger.info(f"🧹 Cleaning up file after unexpected error: {file_path}")
+            logger.info(
+                f"CLEANUP: Cleaning up file after unexpected error: {file_path}"
+            )
             cleanup_file(file_path)
         raise HTTPException(
             status_code=500,

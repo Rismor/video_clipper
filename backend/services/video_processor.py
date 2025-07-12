@@ -19,7 +19,9 @@ class VideoProcessor:
         self.output_dir = "outputs"
         # Ensure output directory exists
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
-        logger.info(f"📁 VideoProcessor initialized with output dir: {self.output_dir}")
+        logger.info(
+            f"DIR: VideoProcessor initialized with output dir: {self.output_dir}"
+        )
 
     async def process_video(
         self,
@@ -47,60 +49,62 @@ class VideoProcessor:
         3. Create montage using moviepy
         4. Return processed video path
         """
-        logger.info(f"🎬 VideoProcessor.process_video called with file: {file_path}")
         logger.info(
-            f"📊 Processing parameters - silence_threshold: {silence_threshold}, audio_sensitivity: {audio_sensitivity}"
+            f"PROCESS: VideoProcessor.process_video called with file: {file_path}"
+        )
+        logger.info(
+            f"PARAMS: Processing parameters - silence_threshold: {silence_threshold}, audio_sensitivity: {audio_sensitivity}"
         )
 
         # Validate input file exists
-        logger.info(f"🔍 Checking if file exists: {file_path}")
+        logger.info(f"CHECK: Checking if file exists: {file_path}")
         if not os.path.exists(file_path):
-            logger.error(f"❌ Input video file not found: {file_path}")
+            logger.error(f"ERROR: Input video file not found: {file_path}")
 
             # Let's also check the current working directory and list files
             cwd = os.getcwd()
-            logger.error(f"❌ Current working directory: {cwd}")
+            logger.error(f"ERROR: Current working directory: {cwd}")
 
             # Try to list files in uploads directory
             uploads_dir = os.path.join(cwd, "uploads")
             if os.path.exists(uploads_dir):
                 files = os.listdir(uploads_dir)
-                logger.error(f"❌ Files in uploads directory: {files}")
+                logger.error(f"ERROR: Files in uploads directory: {files}")
             else:
-                logger.error(f"❌ Uploads directory doesn't exist: {uploads_dir}")
+                logger.error(f"ERROR: Uploads directory doesn't exist: {uploads_dir}")
 
             raise FileNotFoundError(f"Input video file not found: {file_path}")
 
         # Log file info
         try:
             file_size = os.path.getsize(file_path)
-            logger.info(f"✅ File found! Size: {file_size} bytes")
+            logger.info(f"SUCCESS: File found! Size: {file_size} bytes")
         except Exception as e:
-            logger.error(f"❌ Error getting file size: {e}")
+            logger.error(f"ERROR: Error getting file size: {e}")
 
         # Validate parameters
-        logger.info("✅ Validating processing parameters...")
+        logger.info("VALIDATE: Validating processing parameters...")
         if not (0.1 <= silence_threshold <= 5.0):
-            logger.error(f"❌ Invalid silence threshold: {silence_threshold}")
+            logger.error(f"ERROR: Invalid silence threshold: {silence_threshold}")
             raise ValueError("Silence threshold must be between 0.1 and 5.0 seconds")
 
         if not (0.1 <= audio_sensitivity <= 1.0):
-            logger.error(f"❌ Invalid audio sensitivity: {audio_sensitivity}")
+            logger.error(f"ERROR: Invalid audio sensitivity: {audio_sensitivity}")
             raise ValueError("Audio sensitivity must be between 0.1 and 1.0")
 
         # TODO: Implement actual video processing
         # For now, return mock/placeholder response
         logger.info(
-            "🎭 Generating mock processing result (actual processing not implemented)"
+            "MOCK: Generating mock processing result (actual processing not implemented)"
         )
 
         input_filename = os.path.basename(file_path)
         output_filename = f"processed_{input_filename}"
         output_path = os.path.join(self.output_dir, output_filename)
 
-        logger.info(f"📁 Input filename: {input_filename}")
-        logger.info(f"📁 Output filename: {output_filename}")
-        logger.info(f"📁 Output path: {output_path}")
+        logger.info(f"INPUT: Input filename: {input_filename}")
+        logger.info(f"OUTPUT: Output filename: {output_filename}")
+        logger.info(f"PATH: Output path: {output_path}")
 
         # Mock processing result
         result = {
@@ -122,7 +126,7 @@ class VideoProcessor:
             "note": "This is a placeholder response. Actual video processing is not implemented.",
         }
 
-        logger.info("✅ Mock processing completed successfully")
+        logger.info("SUCCESS: Mock processing completed successfully")
         return result
 
     def get_processing_status(self, task_id: str) -> Dict[str, Any]:
@@ -131,7 +135,7 @@ class VideoProcessor:
 
         TODO: Implement actual status tracking
         """
-        logger.info(f"📊 Getting processing status for task: {task_id}")
+        logger.info(f"STATUS: Getting processing status for task: {task_id}")
         return {
             "task_id": task_id,
             "status": "completed",
@@ -146,7 +150,7 @@ class VideoProcessor:
 
         TODO: Implement actual task cancellation
         """
-        logger.info(f"🚫 Cancelling processing task: {task_id}")
+        logger.info(f"CANCEL: Cancelling processing task: {task_id}")
         return {
             "task_id": task_id,
             "status": "cancelled",

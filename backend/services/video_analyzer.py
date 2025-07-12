@@ -2,7 +2,11 @@ import json
 import subprocess
 from typing import Dict, Optional, Any
 import os
+import logging
 from pathlib import Path
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class VideoAnalyzer:
@@ -17,6 +21,8 @@ class VideoAnalyzer:
         """
         Find ffprobe executable in system PATH
         """
+        logger.info("FFPROBE: Searching for ffprobe executable...")
+
         # Try common locations
         common_paths = [
             "ffprobe",
@@ -24,30 +30,70 @@ class VideoAnalyzer:
             "/usr/bin/ffprobe",
             "/usr/local/bin/ffprobe",
             "C:\\ffmpeg\\bin\\ffprobe.exe",
+            "C:\\Program Files\\ffmpeg\\bin\\ffprobe.exe",
+            "C:\\Program Files (x86)\\ffmpeg\\bin\\ffprobe.exe",
         ]
 
         for path in common_paths:
             try:
-                subprocess.run(
-                    [path, "-version"], capture_output=True, check=True, timeout=5
+                logger.info(f"FFPROBE: Trying path: {path}")
+                result = subprocess.run(
+                    [path, "-version"],
+                    capture_output=True,
+                    check=True,
+                    timeout=5,
+                    text=True,
                 )
+                logger.info(f"FFPROBE: Found working ffprobe at: {path}")
                 return path
             except (
                 subprocess.CalledProcessError,
                 FileNotFoundError,
                 subprocess.TimeoutExpired,
-            ):
+            ) as e:
+                logger.debug(f"FFPROBE: Failed to use {path}: {e}")
                 continue
 
         # If not found, return default and let it fail gracefully
+        logger.warning("FFPROBE: No working ffprobe found in common locations")
         return "ffprobe"
+
+    def _check_ffprobe_available(self) -> bool:
+        """
+        Check if ffprobe is available and working
+        """
+        try:
+            result = subprocess.run(
+                [self.ffprobe_path, "-version"],
+                capture_output=True,
+                check=True,
+                timeout=5,
+                text=True,
+            )
+            return True
+        except Exception as e:
+            logger.error(f"FFPROBE: Not available - {e}")
+            return False
 
     async def analyze_video(self, file_path: str) -> Dict[str, Any]:
         """
         Analyze video file and extract metadata
         """
+        logger.info(f"ANALYZE: Starting video analysis for: {file_path}")
+
         if not os.path.exists(file_path):
+            logger.error(f"ERROR: Video file not found: {file_path}")
             raise FileNotFoundError(f"Video file not found: {file_path}")
+
+        # Check if ffprobe is available
+        if not self._check_ffprobe_available():
+            error_msg = (
+                "FFmpeg/ffprobe is not installed or not found in PATH. "
+                "Please install FFmpeg from https://ffmpeg.org/download.html "
+                "or ensure it's in your system PATH."
+            )
+            logger.error(f"ERROR: {error_msg}")
+            raise RuntimeError(error_msg)
 
         try:
             # Run ffprobe to get video metadata
@@ -62,12 +108,20 @@ class VideoAnalyzer:
                 file_path,
             ]
 
+            logger.info(f"FFPROBE: Running command: {' '.join(cmd)}")
+
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=300
             )  # 5 minutes for large files
 
             if result.returncode != 0:
+                logger.error(
+                    f"FFPROBE: Command failed with return code {result.returncode}"
+                )
+                logger.error(f"FFPROBE: stderr: {result.stderr}")
                 raise RuntimeError(f"FFprobe failed: {result.stderr}")
+
+            logger.info("FFPROBE: Successfully extracted metadata")
 
             # Parse JSON output
             metadata = json.loads(result.stdout)
@@ -75,19 +129,25 @@ class VideoAnalyzer:
             # Extract and format relevant information
             analysis = self._extract_video_info(metadata, file_path)
 
+            logger.info("ANALYZE: Video analysis completed successfully")
             return analysis
 
         except subprocess.TimeoutExpired:
+            logger.error("FFPROBE: Analysis timed out")
             raise RuntimeError("Video analysis timed out")
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.error(f"FFPROBE: Failed to parse JSON output: {e}")
             raise RuntimeError("Failed to parse video metadata")
         except Exception as e:
+            logger.error(f"ANALYZE: Video analysis failed: {str(e)}")
             raise RuntimeError(f"Video analysis failed: {str(e)}")
 
     def _extract_video_info(self, metadata: Dict, file_path: str) -> Dict[str, Any]:
         """
         Extract and format video information from ffprobe output
         """
+        logger.info("EXTRACT: Extracting video information from metadata")
+
         format_info = metadata.get("format", {})
         streams = metadata.get("streams", [])
 
@@ -102,6 +162,7 @@ class VideoAnalyzer:
                 audio_stream = stream
 
         if not video_stream:
+            logger.error("EXTRACT: No video stream found in file")
             raise RuntimeError("No video stream found in file")
 
         # Extract video information
@@ -147,7 +208,7 @@ class VideoAnalyzer:
         seconds = int(duration % 60)
         duration_formatted = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-        return {
+        result = {
             "filename": os.path.basename(file_path),
             "resolution": f"{width}x{height}",
             "fps": round(fps, 2),
@@ -162,6 +223,9 @@ class VideoAnalyzer:
             "audio": audio_info,
             "format": format_info.get("format_name", "unknown"),
         }
+
+        logger.info(f"EXTRACT: Successfully extracted info for {result['filename']}")
+        return result
 
     def _parse_fps(self, fps_string: str) -> float:
         """
