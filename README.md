@@ -1,155 +1,293 @@
-# 🥊 Kickboxing Montage Creator
+# Video Clipper
 
-Automatically create epic montages from your kickboxing training videos by cutting out dead silence and keeping only the action-packed sequences!
+A modern full-stack application for video analysis and processing, built with Next.js and FastAPI.
 
-## Features
+## 🎯 Features
 
-- **Smart Audio Analysis**: Automatically detects punch sequences vs silence
-- **Drag & Drop Interface**: Simple web interface for uploading videos
-- **Configurable Settings**: Adjust silence threshold and audio sensitivity
-- **Multi-Format Support**: Accepts MP4, MAV, MOV, AVI inputs and outputs clean MP4
-- **Continuous Montage**: Stitches all active sequences into one epic video
+### Video Analysis
 
-## Prerequisites
+- **Metadata Extraction**: Get detailed information about video files
+- **HDR Detection**: Identify HDR content automatically
+- **Audio Analysis**: Complete audio stream information
+- **Format Support**: Wide range of video formats supported
 
-Before you start, make sure you have:
+### Video Processing (Boilerplate)
 
-1. **Python 3.8+** installed
-2. **FFmpeg** installed and available in your system PATH
-3. At least 20GB of free disk space for processing large files
-4. **Patience** - Large files (5GB+) may take 15-30 minutes to process
+- **Montage Creation**: Remove silent segments (structure only)
+- **Customizable Settings**: Adjustable silence threshold and audio sensitivity
+- **Progress Tracking**: Real-time processing updates
+- **Download Results**: Easy access to processed files
 
-### Installing FFmpeg
+## 🏗️ Architecture
 
-**Windows:**
+```
+video_clipper/
+├── frontend/          # Next.js React application
+│   ├── app/          # Next.js 14 app router
+│   ├── components/   # Reusable UI components
+│   └── lib/          # API utilities
+├── backend/          # FastAPI Python application
+│   ├── routes/       # API endpoints
+│   ├── services/     # Business logic
+│   └── utils/        # Utility functions
+├── uploads/          # Temporary upload directory
+└── outputs/          # Processed file outputs
+```
 
-- Download from https://ffmpeg.org/download.html
-- Extract and add the `bin` folder to your PATH
+## 🚀 Quick Start
 
-**macOS:**
+### Prerequisites
+
+- **Node.js** 18+ and npm
+- **Python** 3.8+ and pip
+- **FFmpeg** (for video analysis)
+
+### 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd video_clipper
+```
+
+### 2. Backend Setup
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the FastAPI server
+python main.py
+```
+
+The backend will be available at `http://localhost:8000`
+
+### 3. Frontend Setup
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
+```
+
+The frontend will be available at `http://localhost:3000`
+
+### 4. Install FFmpeg (Required for Video Analysis)
+
+#### Windows
+
+1. Download from https://ffmpeg.org/download.html
+2. Extract to a folder (e.g., `C:\ffmpeg`)
+3. Add `C:\ffmpeg\bin` to your PATH environment variable
+
+#### macOS
 
 ```bash
 brew install ffmpeg
 ```
 
-**Linux:**
+#### Linux (Ubuntu/Debian)
 
 ```bash
-sudo apt update
-sudo apt install ffmpeg
+sudo apt-get update
+sudo apt-get install ffmpeg
 ```
 
-## Setup Instructions
+## 🔧 Configuration
 
-1. **Clone or download this project**
+### Environment Variables
 
-   ```bash
-   git clone <your-repo-url>
-   cd video_clipper
-   ```
+#### Backend
 
-2. **Install Python dependencies**
+No additional configuration required. The backend uses default settings.
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+#### Frontend
 
-3. **Run the application**
+Create a `.env.local` file in the frontend directory:
 
-   ```bash
-   python app.py
-   ```
-
-4. **Open your browser and go to:**
-   ```
-   http://localhost:5000
-   ```
-
-## How to Use
-
-1. **Upload Video**: Drag and drop your kickboxing training video (MP4, MAV, MOV, AVI formats)
-2. **Adjust Settings**:
-   - **Silence Threshold**: How long silence before cutting (default: 0.8s)
-   - **Audio Sensitivity**: How sensitive to detect sounds (default: 0.3)
-3. **Click "Create Montage"** and wait for processing
-4. **Download** your epic montage!
-
-## Settings Guide
-
-### Silence Threshold
-
-- **Lower values (0.1-0.5s)**: More aggressive cutting, removes short pauses
-- **Higher values (1.0-2.0s)**: Only removes longer silence periods
-
-### Audio Sensitivity
-
-- **Lower values (0.1-0.3)**: More sensitive, catches quieter sounds
-- **Higher values (0.4-0.8)**: Less sensitive, only loud punches
-
-## Tips for Best Results
-
-- **Clear Audio**: Make sure your video has good audio quality
-- **Consistent Volume**: Try to maintain consistent punch intensity
-- **Avoid Background Noise**: Minimize music or talking during recording
-- **Good Lighting**: While not required for audio analysis, helps with final video quality
-
-## Troubleshooting
-
-### "No active segments found"
-
-- Try lowering the audio sensitivity (0.1-0.2)
-- Check if your video has audio
-- Ensure there are actual sounds in your video
-
-### "FFmpeg not found"
-
-- Make sure FFmpeg is installed and in your PATH
-- Try restarting your terminal after installation
-
-### Processing takes too long
-
-- Large videos (>1GB) may take 15-30 minutes
-- Very large videos (>5GB) may take 30-60 minutes
-- Check your available disk space (need ~3x the video size free)
-- Close other applications to free up memory
-- Don't close the browser tab - let it run in the background
-
-### Poor quality output
-
-- Check your input video quality
-- Ensure stable internet connection during processing
-
-## Technical Details
-
-The app uses:
-
-- **Flask** for the web server
-- **librosa** for audio analysis
-- **moviepy** for video processing
-- **FFmpeg** for media encoding
-
-## File Structure
-
-```
-video_clipper/
-├── app.py              # Main Flask application
-├── index.html          # Frontend interface
-├── styles.css          # Styling
-├── script.js           # Frontend logic
-├── requirements.txt    # Python dependencies
-├── uploads/            # Temporary upload folder
-└── outputs/            # Processed video outputs
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-## Support
+## 📖 Usage
 
-If you encounter issues:
+### Video Analysis
 
-1. Check the console output for error messages
-2. Ensure all prerequisites are installed
-3. Try with a smaller video file first
-4. Check that your video has clear audio
+1. Open the application in your browser
+2. Select "Analyze Video" mode
+3. Drag and drop a video file or click to browse
+4. View detailed metadata including:
+   - File information (name, size, format)
+   - Video properties (resolution, FPS, codec, bitrate, HDR)
+   - Audio properties (codec, channels, sample rate)
 
----
+### Video Processing
 
-**Built with ❤️ for kickboxing enthusiasts! 🥊**
+1. Select "Process Video" mode
+2. Upload a video file
+3. Adjust settings:
+   - **Silence Threshold**: Minimum duration of silence (0.1-5.0 seconds)
+   - **Audio Sensitivity**: Sensitivity to audio changes (10-100%)
+4. Click "Create Montage" to process
+5. Download the processed video
+
+> **Note**: Video processing currently returns mock data as it's implemented as boilerplate only.
+
+## 🛠️ API Endpoints
+
+### Video Analysis
+
+- `POST /api/analyze-video` - Analyze video metadata
+- `GET /api/analyze-video/health` - Service health check
+
+### Video Processing
+
+- `POST /api/process-video` - Process video (boilerplate)
+- `GET /api/process-video/health` - Service health check
+
+### General
+
+- `GET /` - API root
+- `GET /health` - General health check
+- `GET /docs` - Swagger API documentation
+
+## 🔍 Technical Details
+
+### Backend (FastAPI)
+
+- **Framework**: FastAPI with uvicorn
+- **Video Analysis**: FFprobe for metadata extraction
+- **File Handling**: Automatic cleanup and validation
+- **Architecture**: Clean separation of routes, services, and utilities
+
+### Frontend (Next.js)
+
+- **Framework**: Next.js 14 with App Router
+- **Styling**: Tailwind CSS with custom components
+- **State Management**: React hooks
+- **File Upload**: React Dropzone with validation
+
+## 🎨 UI Features
+
+- **Drag & Drop**: Intuitive file upload
+- **Real-time Updates**: Live progress indicators
+- **Responsive Design**: Works on all screen sizes
+- **Visual Feedback**: Smooth animations and transitions
+- **Error Handling**: User-friendly error messages
+
+## 📁 File Support
+
+### Supported Video Formats
+
+- MP4, AVI, MOV, MKV, WebM, M4V, FLV, WMV
+
+### File Size Limits
+
+- **No file size limits** - Supports large video files (15GB+)
+- Automatic file cleanup after processing
+
+## 🔒 Security
+
+- File type validation
+- File size restrictions
+- Automatic cleanup of temporary files
+- CORS configuration for frontend access
+
+## 📊 Performance
+
+- Efficient file handling
+- Automatic resource cleanup
+- Optimized frontend bundle
+- Responsive UI with smooth animations
+
+## 🚧 Known Limitations
+
+- **Video Processing**: Currently implemented as boilerplate only
+- **File Size**: No limits - supports large video files (15GB+)
+- **Concurrent Processing**: Single file processing at a time
+- **Storage**: Temporary files are automatically cleaned up
+
+## 🛠️ Development
+
+### Backend Development
+
+```bash
+cd backend
+# Install in development mode
+pip install -r requirements.txt
+# Run with auto-reload
+uvicorn main:app --reload
+```
+
+### Frontend Development
+
+```bash
+cd frontend
+# Install dependencies
+npm install
+# Run development server
+npm run dev
+```
+
+### Project Structure
+
+The project follows clean architecture principles:
+
+- **Separation of Concerns**: Routes, services, and utilities are separate
+- **Type Safety**: Full TypeScript implementation
+- **Error Handling**: Comprehensive error handling throughout
+- **Documentation**: Extensive inline documentation
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Troubleshooting
+
+### Common Issues
+
+1. **FFmpeg not found**: Ensure FFmpeg is installed and in PATH
+2. **CORS errors**: Check that backend is running on port 8000
+3. **File upload fails**: Verify file format requirements (no size limits)
+4. **Server offline**: Ensure both backend and frontend servers are running
+
+### Getting Help
+
+1. Check the console for error messages
+2. Verify all dependencies are installed
+3. Ensure FFmpeg is properly installed
+4. Check that both servers are running on correct ports
+
+## 🎉 Acknowledgments
+
+Built with modern web technologies:
+
+- Next.js for the frontend framework
+- FastAPI for the backend API
+- Tailwind CSS for styling
+- FFmpeg for video processing
+- React Dropzone for file uploads
