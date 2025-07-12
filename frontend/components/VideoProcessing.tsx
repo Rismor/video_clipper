@@ -63,14 +63,27 @@ export default function VideoProcessing({
 
   const handleDownload = () => {
     if (result?.output_path) {
+      // Construct the proper download URL
+      const API_BASE_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const downloadUrl = `${API_BASE_URL}${result.output_path}`;
+
       // Create a download link
       const link = document.createElement("a");
-      link.href = result.output_path;
+      link.href = downloadUrl;
       link.download = result.output_file;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     }
+  };
+
+  // Get the proper video URL for playback
+  const getVideoUrl = () => {
+    if (!result?.output_path) return undefined;
+    const API_BASE_URL =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    return `${API_BASE_URL}${result.output_path}`;
   };
 
   return (
@@ -93,12 +106,12 @@ export default function VideoProcessing({
               Noise Threshold: {settings.noiseThresholdPercent}%
             </label>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">50%</span>
+              <span className="text-sm text-gray-500">0%</span>
               <input
                 type="range"
-                min="50"
-                max="99"
-                step="1"
+                min="0"
+                max="100"
+                step="5"
                 value={settings.noiseThresholdPercent}
                 onChange={(e) =>
                   setSettings((prev) => ({
@@ -109,7 +122,7 @@ export default function VideoProcessing({
                 className="slider flex-1"
                 disabled={isProcessing}
               />
-              <span className="text-sm text-gray-500">99%</span>
+              <span className="text-sm text-gray-500">100%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
               Only keep audio above this percentage of your loudest hit
@@ -119,15 +132,15 @@ export default function VideoProcessing({
           {/* Padding Duration */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Padding Duration: {settings.paddingDuration}s
+              Padding Duration: {settings.paddingDuration.toFixed(2)}s
             </label>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">0.5s</span>
+              <span className="text-sm text-gray-500">0.01s</span>
               <input
                 type="range"
-                min="0.5"
+                min="0.01"
                 max="10.0"
-                step="0.5"
+                step="0.01"
                 value={settings.paddingDuration}
                 onChange={(e) =>
                   setSettings((prev) => ({
@@ -216,7 +229,7 @@ export default function VideoProcessing({
         </div>
       )}
 
-      {/* Results Display */}
+      {/* Results Display with Video Player */}
       {result && (
         <div className="bg-white rounded-xl shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
@@ -247,21 +260,49 @@ export default function VideoProcessing({
             </div>
           )}
 
+          {/* Video Player */}
+          {getVideoUrl() && (
+            <div className="mb-6">
+              <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
+                <Film className="w-5 h-5 text-primary-600" />
+                <span>Your Heavy Bag Montage</span>
+              </h4>
+              <div className="bg-black rounded-lg overflow-hidden">
+                <video
+                  controls
+                  autoPlay
+                  className="w-full h-auto"
+                  style={{ maxHeight: "60vh" }}
+                >
+                  <source src={getVideoUrl()} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                🎯 Your heavy bag combo montage is ready! Use the video controls
+                to play, pause, and skip through your best hits.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* File Information */}
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
                 File Information
               </h4>
-
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Input File:</span>
-                  <span className="font-medium">{result.input_file}</span>
+                  <span className="text-sm text-gray-600">Input File:</span>
+                  <span className="text-sm font-medium text-gray-800">
+                    {result.input_file}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Output File:</span>
-                  <span className="font-medium">{result.output_file}</span>
+                  <span className="text-sm text-gray-600">Output File:</span>
+                  <span className="text-sm font-medium text-gray-800">
+                    {result.output_file}
+                  </span>
                 </div>
               </div>
             </div>
@@ -271,37 +312,38 @@ export default function VideoProcessing({
               <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
                 Processing Statistics
               </h4>
-
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Combos Detected:</span>
-                  <span className="font-medium">
+                  <span className="text-sm text-gray-600">Hits Detected:</span>
+                  <span className="text-sm font-medium text-gray-800">
                     {result.processing_stats.hits_detected}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Original Duration:</span>
-                  <span className="font-medium">
+                  <span className="text-sm text-gray-600">Total Duration:</span>
+                  <span className="text-sm font-medium text-gray-800">
                     {result.processing_stats.total_duration}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Montage Duration:</span>
-                  <span className="font-medium">
+                  <span className="text-sm text-gray-600">
+                    Montage Duration:
+                  </span>
+                  <span className="text-sm font-medium text-gray-800">
                     {result.processing_stats.montage_duration}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Time Saved:</span>
-                  <span className="font-medium">
+                  <span className="text-sm text-gray-600">Time Saved:</span>
+                  <span className="text-sm font-medium text-green-600">
                     {result.processing_stats.time_saved}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Compression Ratio:</span>
-                  <span className="font-medium">
-                    {Math.round(
-                      result.processing_stats.compression_ratio * 100
+                  <span className="text-sm text-gray-600">Compression:</span>
+                  <span className="text-sm font-medium text-gray-800">
+                    {(result.processing_stats.compression_ratio * 100).toFixed(
+                      1
                     )}
                     %
                   </span>
@@ -312,20 +354,20 @@ export default function VideoProcessing({
 
           {/* Settings Used */}
           <div className="mt-6 pt-6 border-t border-gray-200">
-            <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+            <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
               Settings Used
             </h4>
-            <div className="flex space-x-6">
-              <div className="flex items-center space-x-2">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">
-                  Noise Threshold: {result.settings.noise_threshold_percent}%
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Noise Threshold:</span>
+                <span className="text-sm font-medium text-gray-800">
+                  {result.settings.noise_threshold_percent}%
                 </span>
               </div>
-              <div className="flex items-center space-x-2">
-                <Film className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">
-                  Padding Duration: {result.settings.padding_duration}s
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Padding Duration:</span>
+                <span className="text-sm font-medium text-gray-800">
+                  {result.settings.padding_duration}s
                 </span>
               </div>
             </div>

@@ -271,35 +271,6 @@ export default function Home() {
           />
         </div>
 
-        {/* Selected File Info */}
-        {selectedFile && (
-          <div className="max-w-4xl mx-auto mb-8">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <FileVideo className="w-6 h-6 text-primary-600" />
-                  <div>
-                    <h3 className="font-semibold text-gray-800">
-                      {selectedFile.name}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">
-                    Mode:{" "}
-                    <span className="font-medium">
-                      {mode === "analyze" ? "Analysis" : "Heavy Bag Montage"}
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Content based on mode */}
         {mode === "analyze" && (
           <VideoAnalysis

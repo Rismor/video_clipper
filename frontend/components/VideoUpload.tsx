@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, FileVideo, X, AlertCircle } from "lucide-react";
+import { Upload, FileVideo, X, AlertCircle, Film } from "lucide-react";
 
 interface VideoUploadProps {
   onFileSelect: (file: File) => void;
@@ -27,6 +27,8 @@ export default function VideoUpload({
   disabled = false,
 }: VideoUploadProps) {
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
 
   const onDrop = useCallback(
     (acceptedFiles: File[], rejectedFiles: any[]) => {
@@ -54,6 +56,12 @@ export default function VideoUpload({
       // Handle accepted files
       if (acceptedFiles.length > 0) {
         const file = acceptedFiles[0];
+        setSelectedFile(file);
+
+        // Create preview URL
+        const previewUrl = URL.createObjectURL(file);
+        setVideoPreviewUrl(previewUrl);
+
         onFileSelect(file);
       }
     },
@@ -73,8 +81,17 @@ export default function VideoUpload({
 
   const clearError = () => setUploadError(null);
 
+  const removeFile = () => {
+    setSelectedFile(null);
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+      setVideoPreviewUrl(null);
+    }
+  };
+
   return (
     <div className="w-full">
+      {/* Upload Area */}
       <div
         {...getRootProps()}
         className={`
@@ -144,6 +161,7 @@ export default function VideoUpload({
         )}
       </div>
 
+      {/* Error Display */}
       {uploadError && (
         <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -156,6 +174,48 @@ export default function VideoUpload({
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Video Preview */}
+      {selectedFile && videoPreviewUrl && (
+        <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <Film className="w-6 h-6 text-primary-600" />
+              <div>
+                <h3 className="font-semibold text-gray-800">
+                  {selectedFile.name}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={removeFile}
+              className="text-gray-400 hover:text-red-500 transition-colors"
+              title="Remove file"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="bg-black rounded-lg overflow-hidden">
+            <video
+              controls
+              className="w-full h-auto"
+              style={{ maxHeight: "50vh" }}
+            >
+              <source src={videoPreviewUrl} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+
+          <p className="text-sm text-gray-600 mt-3">
+            📹 Preview your uploaded video above. Ready to analyze or process
+            it? Choose your mode and let's get started!
+          </p>
         </div>
       )}
     </div>
