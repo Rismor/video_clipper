@@ -167,47 +167,45 @@ def create_montage(video_file, segments, output_file):
             f"Final video properties - Size: {final_video.size}, FPS: {final_video.fps}"
         )
 
-        # Write the final video with HDR support and enhanced settings
-        logger.info("🎨 Encoding video with HDR support...")
+        # Write the final video with optimized settings for reliability
+        logger.info("🎨 Encoding video with optimized settings...")
+        logger.info(f"⏱️ Encoding {len(clips)} clips into final video...")
+        logger.info("💡 Using H.264 encoding for better compatibility and speed")
+
         final_video.write_videofile(
             output_file,
-            codec="libx265",  # H.265 for better HDR support
+            codec="libx264",  # H.264 for better compatibility and speed
             audio_codec="aac",
             temp_audiofile="temp-audio.m4a",
             remove_temp=True,
-            verbose=False,
-            logger=None,
-            preset="medium",
+            verbose=True,  # Enable verbose to show progress
+            logger="bar",  # Show progress bar
+            preset="fast",  # Faster encoding to prevent hanging
             # Preserve original video properties
             fps=original_fps,
             bitrate=None,  # Let it auto-detect to maintain quality
-            # HDR and enhanced settings
+            # Optimized settings for reliability
             ffmpeg_params=[
                 "-crf",
-                "18",  # High quality encoding
+                "23",  # Good quality but faster encoding
                 "-profile:v",
-                "main10",  # H.265 main10 profile for HDR
+                "high",  # H.264 high profile
                 "-level",
-                "5.1",  # H.265 level for HDR
+                "4.1",  # H.264 level for wide compatibility
                 "-pix_fmt",
-                "yuv420p10le",  # 10-bit pixel format for HDR
-                "-color_primaries",
-                "bt2020",  # HDR color primaries
-                "-color_trc",
-                "smpte2084",  # HDR transfer characteristics (PQ)
-                "-colorspace",
-                "bt2020nc",  # HDR colorspace
+                "yuv420p",  # Standard 8-bit pixel format
                 "-movflags",
                 "+faststart",  # Optimize for streaming
-                "-aspect",
-                f"{original_size[0]}:{original_size[1]}",  # Preserve aspect ratio
-                "-s",
-                f"{original_size[0]}x{original_size[1]}",  # Preserve resolution
-                # Force HDR metadata
-                "-x265-params",
-                "hdr10=1:hdr10-opt=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc",
+                "-threads",
+                "0",  # Use all available CPU cores
+                "-preset",
+                "fast",  # Fast encoding preset
+                "-tune",
+                "film",  # Optimize for film content
             ],
         )
+
+        logger.info("✅ Video encoding completed successfully!")
 
         # Clean up
         video.close()
