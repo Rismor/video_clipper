@@ -24,16 +24,16 @@ processor = VideoProcessor()
 @router.post("/process-video")
 async def process_video(
     file: UploadFile = File(...),
-    noise_threshold_percent: float = Form(90.0),
-    padding_duration: float = Form(2.0),
+    audio_sensitivity: float = Form(0.3),
+    merge_threshold: float = Form(0.8),
 ):
     """
     Process uploaded heavy bag training video to create montage of hits
 
     Args:
         file: Video file to process
-        noise_threshold_percent: Noise gate threshold as percentage of peak (50-99%, default 90%)
-        padding_duration: How much video to keep around each hit in seconds (0.5-10.0, default 2.0)
+        audio_sensitivity: RMS energy sensitivity threshold (0.0-1.0, default 0.3)
+        merge_threshold: How close segments can be to merge them in seconds (0.1-5.0, default 0.8)
 
     Returns:
         Processing results with heavy bag montage
@@ -45,7 +45,7 @@ async def process_video(
         f"PROCESS: Starting heavy bag video processing for file: {file.filename}"
     )
     logger.info(
-        f"PARAMS: Parameters - noise_threshold_percent: {noise_threshold_percent}%, padding_duration: {padding_duration}s"
+        f"PARAMS: Parameters - audio_sensitivity: {audio_sensitivity}, merge_threshold: {merge_threshold}s"
     )
     logger.info(
         f"SIZE: File size: {file.size} bytes"
@@ -56,18 +56,18 @@ async def process_video(
     try:
         # Validate parameters
         logger.info("VALIDATE: Validating parameters...")
-        if not (50.0 <= noise_threshold_percent <= 99.0):
-            logger.error(f"ERROR: Invalid noise threshold: {noise_threshold_percent}%")
+        if not (0.0 <= audio_sensitivity <= 1.0):
+            logger.error(f"ERROR: Invalid audio sensitivity: {audio_sensitivity}")
             raise HTTPException(
                 status_code=400,
-                detail="Noise threshold must be between 50% and 99%",
+                detail="Audio sensitivity must be between 0.0 and 1.0",
             )
 
-        if not (0.5 <= padding_duration <= 10.0):
-            logger.error(f"ERROR: Invalid padding duration: {padding_duration}s")
+        if not (0.1 <= merge_threshold <= 5.0):
+            logger.error(f"ERROR: Invalid merge threshold: {merge_threshold}s")
             raise HTTPException(
                 status_code=400,
-                detail="Padding duration must be between 0.5 and 10.0 seconds",
+                detail="Merge threshold must be between 0.1 and 5.0 seconds",
             )
 
         # Save uploaded file
@@ -87,8 +87,8 @@ async def process_video(
         logger.info("PROCESS: Starting heavy bag video processing...")
         processing_result = await processor.process_video(
             file_path=file_path,
-            noise_threshold_percent=noise_threshold_percent,
-            padding_duration=padding_duration,
+            audio_sensitivity=audio_sensitivity,
+            merge_threshold=merge_threshold,
         )
 
         processing_time = (datetime.now() - start_time).total_seconds()

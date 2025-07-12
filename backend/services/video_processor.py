@@ -6,6 +6,9 @@ import subprocess
 import json
 import uuid
 import re
+import librosa
+import numpy as np
+from moviepy.editor import VideoFileClip
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -54,220 +57,110 @@ class VideoProcessor:
         logger.warning("FFMPEG: No working ffmpeg found in common locations")
         return "ffmpeg"
 
-    def _analyze_audio_with_noise_gate(
-        self, file_path: str, noise_threshold_percent: float, padding_duration: float
+    def _analyze_audio_with_rms_energy(
+        self, file_path: str, audio_sensitivity: float, merge_threshold: float
     ) -> List[Tuple[float, float]]:
         """
-        Analyze audio using noise gate approach to detect heavy bag combos
-        Returns list of (start_time, end_time) tuples for combo segments with padding
+        Analyze audio using RMS energy to detect heavy bag combos
+        Returns list of (start_time, end_time) tuples for combo segments
         """
-        logger.info(f"NOISE_GATE: Analyzing audio for heavy bag combos in {file_path}")
+        logger.info(f"RMS_ENERGY: Analyzing audio for heavy bag combos in {file_path}")
         logger.info(
-            f"NOISE_GATE: Threshold={noise_threshold_percent}%, Padding={padding_duration}s"
+            f"RMS_ENERGY: Sensitivity={audio_sensitivity}, Merge threshold={merge_threshold}s"
         )
 
-        # Step 1: Get audio statistics to find peak volume
-        stats_cmd = [
-            self.ffmpeg_path,
-            "-i",
-            file_path,
-            "-af",
-            "astats=metadata=1:reset=1",
-            "-f",
-            "null",
-            "-",
-        ]
-
+        temp_audio_path = None
         try:
-            result = subprocess.run(
-                stats_cmd, capture_output=True, text=True, timeout=300
-            )
+            # Step 1: Extract audio using moviepy
+            logger.info("RMS_ENERGY: Extracting audio from video...")
+            video = VideoFileClip(file_path)
 
-            # Parse maximum peak from output
-            max_peak_db = -60.0  # Default fallback
-            for line in result.stderr.split("\n"):
-                if "Overall Maximum Peak:" in line:
-                    try:
-                        peak_match = re.search(r"(-?\d+\.?\d*)\s*dB", line)
-                        if peak_match:
-                            max_peak_db = float(peak_match.group(1))
-                            break
-                    except ValueError:
-                        continue
+            # Create temporary audio file
+            temp_audio_path = f"temp_audio_{uuid.uuid4().hex[:8]}.wav"
+            video.audio.write_audiofile(temp_audio_path, verbose=False, logger=None)
+            video.close()
 
-            logger.info(f"NOISE_GATE: Found maximum peak at {max_peak_db} dB")
+            # Step 2: Load audio with librosa
+            logger.info("RMS_ENERGY: Loading audio with librosa...")
+            y, sr = librosa.load(temp_audio_path, sr=None)
 
-            # Calculate threshold based on percentage
-            # Use a proper dynamic range calculation
-            # Assume noise floor is around -80 dB below peak
-            noise_floor_db = max_peak_db - 80
-            dynamic_range = max_peak_db - noise_floor_db
+            # Step 3: Calculate RMS energy
+            logger.info("RMS_ENERGY: Calculating RMS energy...")
+            hop_length = 512
+            frame_length = 2048
+            rms = librosa.feature.rms(
+                y=y, frame_length=frame_length, hop_length=hop_length
+            )[0]
 
-            # Calculate threshold as percentage from peak towards noise floor
-            threshold_offset = dynamic_range * (noise_threshold_percent / 100)
-            threshold_db = max_peak_db - threshold_offset
+            # Convert to dB
+            rms_db = librosa.amplitude_to_db(rms, ref=np.max)
 
-            # Safeguard: ensure threshold is at least 10 dB below peak
-            # This prevents cases where the threshold is too close to the peak
-            min_threshold_db = max_peak_db - 10
-            if threshold_db > min_threshold_db:
-                logger.warning(
-                    f"NOISE_GATE: Threshold {threshold_db:.1f} dB too close to peak, using {min_threshold_db:.1f} dB instead"
-                )
-                threshold_db = min_threshold_db
+            # Normalize to 0-1 range
+            rms_norm = (rms_db - np.min(rms_db)) / (np.max(rms_db) - np.min(rms_db))
 
+            # Time axis
+            frames = range(len(rms))
+            times = librosa.frames_to_time(frames, sr=sr, hop_length=hop_length)
+
+            # Step 4: Find active segments (above audio sensitivity threshold)
+            active_mask = rms_norm > audio_sensitivity
             logger.info(
-                f"NOISE_GATE: Peak: {max_peak_db} dB, Noise floor: {noise_floor_db} dB"
-            )
-            logger.info(
-                f"NOISE_GATE: Using threshold of {threshold_db:.1f} dB ({noise_threshold_percent}% from peak)"
+                f"RMS_ENERGY: Found {np.sum(active_mask)} active frames out of {len(active_mask)}"
             )
 
-            # Step 2: Detect silence segments (gaps longer than padding_duration)
-            # This finds where audio is below threshold for more than padding_duration
-            detect_cmd = [
-                self.ffmpeg_path,
-                "-i",
-                file_path,
-                "-af",
-                f"silencedetect=noise={threshold_db}dB:d={padding_duration}",
-                "-f",
-                "null",
-                "-",
-            ]
+            # Step 5: Find continuous segments
+            segments = []
+            start_time = None
 
-            logger.info(
-                f"NOISE_GATE: Running combo detection with {padding_duration}s silence threshold"
-            )
-            result = subprocess.run(
-                detect_cmd, capture_output=True, text=True, timeout=300
-            )
+            for i, (time, is_active) in enumerate(zip(times, active_mask)):
+                if is_active and start_time is None:
+                    # Start of active segment
+                    start_time = time
+                elif not is_active and start_time is not None:
+                    # End of active segment
+                    segments.append((start_time, time))
+                    start_time = None
 
-            # Debug: Log the silence detection output
-            logger.info("NOISE_GATE: Silence detection output:")
-            silence_lines = [
-                line for line in result.stderr.split("\n") if "silence" in line.lower()
-            ]
-            for line in silence_lines:
-                logger.info(f"  {line}")
+            # Handle case where audio ends during active segment
+            if start_time is not None:
+                segments.append((start_time, times[-1]))
 
-            # Parse silence detection output
-            silence_segments = []
-            lines = result.stderr.split("\n")
+            logger.info(f"RMS_ENERGY: Found {len(segments)} raw active segments")
 
-            current_silence_start = None
-            for line in lines:
-                if "silence_start:" in line:
-                    try:
-                        start_time = float(line.split("silence_start:")[1].strip())
-                        current_silence_start = start_time
-                    except (ValueError, IndexError):
-                        continue
-                elif "silence_end:" in line and current_silence_start is not None:
-                    try:
-                        end_time = float(
-                            line.split("silence_end:")[1].split("|")[0].strip()
-                        )
-                        silence_segments.append((current_silence_start, end_time))
-                        current_silence_start = None
-                    except (ValueError, IndexError):
-                        continue
-
-            logger.info(
-                f"NOISE_GATE: Found {len(silence_segments)} raw silence segments"
-            )
-            for i, (start, end) in enumerate(silence_segments):
-                logger.info(
-                    f"  Silence {i+1}: {start:.2f}s - {end:.2f}s ({end-start:.2f}s)"
-                )
-
-            # Get video duration
-            duration = self._get_video_duration(file_path)
-            logger.info(f"NOISE_GATE: Video duration: {duration:.2f}s")
-
-            # Convert silence segments to combo segments
-            # Everything that's NOT silent for more than padding_duration is a combo
-            combo_segments = []
-            last_end = 0.0
-
-            logger.info("NOISE_GATE: Converting silence segments to combo segments...")
-            for i, (silence_start, silence_end) in enumerate(silence_segments):
-                # Add combo segment before this silence
-                if silence_start > last_end:
-                    combo_segments.append((last_end, silence_start))
-                    logger.info(
-                        f"  Added combo: {last_end:.2f}s - {silence_start:.2f}s (before silence {i+1})"
-                    )
-                else:
-                    logger.info(
-                        f"  Skipped combo before silence {i+1}: no gap ({last_end:.2f}s >= {silence_start:.2f}s)"
-                    )
-                last_end = silence_end
-
-            # Add final combo segment if there's time left
-            if last_end < duration:
-                combo_segments.append((last_end, duration))
-                logger.info(f"  Added final combo: {last_end:.2f}s - {duration:.2f}s")
-            else:
-                logger.info(
-                    f"  No final combo needed: {last_end:.2f}s >= {duration:.2f}s"
-                )
-
-            logger.info(f"NOISE_GATE: Created {len(combo_segments)} raw combo segments")
-
-            # Step 3: Add padding around combo segments
-            padded_segments = []
-
-            for start, end in combo_segments:
-                # Add padding before and after each combo
-                padded_start = max(0, start - padding_duration)
-                padded_end = min(duration, end + padding_duration)
-                padded_segments.append((padded_start, padded_end))
-
-            # Step 4: Merge overlapping segments (in case padding causes overlap)
-            if not padded_segments:
-                logger.warning("NOISE_GATE: No combo segments found")
-                return []
-
-            # Sort by start time
-            padded_segments.sort(key=lambda x: x[0])
+            # Step 6: Merge segments that are close together
             merged_segments = []
-            current_start, current_end = padded_segments[0]
-
-            for start, end in padded_segments[1:]:
-                if start <= current_end:  # Overlapping segments
-                    current_end = max(current_end, end)  # Extend current segment
+            for start, end in segments:
+                if merged_segments and start - merged_segments[-1][1] < merge_threshold:
+                    # Merge with previous segment
+                    merged_segments[-1] = (merged_segments[-1][0], end)
                 else:
-                    merged_segments.append((current_start, current_end))
-                    current_start, current_end = start, end
+                    merged_segments.append((start, end))
 
-            # Add the last segment
-            merged_segments.append((current_start, current_end))
+            logger.info(f"RMS_ENERGY: After merging: {len(merged_segments)} segments")
 
-            # Filter out very short segments (less than 0.5 seconds)
-            merged_segments = [
-                (start, end) for start, end in merged_segments if (end - start) >= 0.5
+            # Step 7: Filter out very short segments (less than 0.5 seconds)
+            final_segments = [
+                (start, end) for start, end in merged_segments if end - start > 0.5
             ]
 
-            logger.info(
-                f"NOISE_GATE: Found {len(merged_segments)} combo segments with padding"
-            )
-            total_time = sum(end - start for start, end in merged_segments)
-            logger.info(f"NOISE_GATE: Total combo time: {total_time:.2f}s")
-
-            for i, (start, end) in enumerate(merged_segments):
+            logger.info(f"RMS_ENERGY: Final segments: {len(final_segments)}")
+            for i, (start, end) in enumerate(final_segments):
                 logger.info(
-                    f"  Combo {i+1}: {start:.2f}s - {end:.2f}s ({end-start:.2f}s)"
+                    f"  Segment {i+1}: {start:.2f}s - {end:.2f}s ({end-start:.2f}s)"
                 )
 
-            return merged_segments
+            return final_segments
 
-        except subprocess.TimeoutExpired:
-            logger.error("NOISE_GATE: Audio analysis timed out")
-            raise RuntimeError("Audio analysis timed out")
         except Exception as e:
-            logger.error(f"NOISE_GATE: Audio analysis failed: {str(e)}")
+            logger.error(f"RMS_ENERGY: Audio analysis failed: {str(e)}")
             raise RuntimeError(f"Audio analysis failed: {str(e)}")
+        finally:
+            # Clean up temporary audio file
+            if temp_audio_path and os.path.exists(temp_audio_path):
+                try:
+                    os.remove(temp_audio_path)
+                except:
+                    pass
 
     def _get_video_duration(self, file_path: str) -> float:
         """Get video duration in seconds"""
@@ -384,16 +277,16 @@ class VideoProcessor:
     async def process_video(
         self,
         file_path: str,
-        noise_threshold_percent: float = 90.0,
-        padding_duration: float = 2.0,
+        audio_sensitivity: float = 0.3,
+        merge_threshold: float = 0.8,
     ) -> Dict[str, Any]:
         """
-        Process heavy bag training video using noise gate to detect combos
-        Creates montage of all combinations with padding around each combo
+        Process heavy bag training video using RMS energy to detect combos
+        Creates montage of all combinations
         """
         logger.info(f"PROCESS: Starting heavy bag video processing for: {file_path}")
         logger.info(
-            f"PARAMS: noise_threshold_percent={noise_threshold_percent}%, padding_duration={padding_duration}s"
+            f"PARAMS: audio_sensitivity={audio_sensitivity}, merge_threshold={merge_threshold}s"
         )
 
         # Validate input file exists
@@ -402,10 +295,10 @@ class VideoProcessor:
             raise FileNotFoundError(f"Input video file not found: {file_path}")
 
         # Validate parameters
-        if not (50.0 <= noise_threshold_percent <= 99.0):
-            raise ValueError("Noise threshold must be between 50% and 99%")
-        if not (0.5 <= padding_duration <= 10.0):
-            raise ValueError("Padding duration must be between 0.5 and 10.0 seconds")
+        if not (0.0 <= audio_sensitivity <= 1.0):
+            raise ValueError("Audio sensitivity must be between 0.0 and 1.0")
+        if not (0.1 <= merge_threshold <= 5.0):
+            raise ValueError("Merge threshold must be between 0.1 and 5.0 seconds")
 
         try:
             # Generate output filename
@@ -416,9 +309,9 @@ class VideoProcessor:
 
             logger.info(f"OUTPUT: Generated output path: {output_path}")
 
-            # Step 1: Analyze audio with noise gate to find combo segments
-            combo_segments = self._analyze_audio_with_noise_gate(
-                file_path, noise_threshold_percent, padding_duration
+            # Step 1: Analyze audio with RMS energy to find combo segments
+            combo_segments = self._analyze_audio_with_rms_energy(
+                file_path, audio_sensitivity, merge_threshold
             )
 
             if not combo_segments:
@@ -427,8 +320,8 @@ class VideoProcessor:
                     "message": "No heavy bag combos detected in video",
                     "input_file": input_filename,
                     "settings": {
-                        "noise_threshold_percent": noise_threshold_percent,
-                        "padding_duration": padding_duration,
+                        "audio_sensitivity": audio_sensitivity,
+                        "merge_threshold": merge_threshold,
                     },
                 }
 
@@ -443,8 +336,8 @@ class VideoProcessor:
                     "message": "Failed to create heavy bag montage",
                     "input_file": input_filename,
                     "settings": {
-                        "noise_threshold_percent": noise_threshold_percent,
-                        "padding_duration": padding_duration,
+                        "audio_sensitivity": audio_sensitivity,
+                        "merge_threshold": merge_threshold,
                     },
                 }
 
@@ -469,8 +362,8 @@ class VideoProcessor:
                 "output_file": output_filename,
                 "output_path": f"/outputs/{output_filename}",  # Web-accessible path
                 "settings": {
-                    "noise_threshold_percent": noise_threshold_percent,
-                    "padding_duration": padding_duration,
+                    "audio_sensitivity": audio_sensitivity,
+                    "merge_threshold": merge_threshold,
                 },
                 "processing_stats": {
                     "hits_detected": len(combo_segments),
