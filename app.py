@@ -128,14 +128,30 @@ def create_montage(video_file, segments, output_file):
 
         # Create clips for each active segment
         clips = []
-        for start, end in segments:
+        total_segments = len(segments)
+
+        for i, (start, end) in enumerate(segments, 1):
             # Ensure we don't go beyond video duration
             start = max(0, start)
             end = min(video.duration, end)
 
             if end > start:  # Only add if segment is valid
+                logger.info(
+                    f"🎬 Processing clip {i}/{total_segments} - {start:.2f}s to {end:.2f}s ({end-start:.2f}s duration)"
+                )
                 clip = video.subclip(start, end)
                 clips.append(clip)
+                logger.info(
+                    f"✅ Clip {i}/{total_segments} processed - {len(clips)} clips ready"
+                )
+            else:
+                logger.warning(
+                    f"⚠️ Skipping invalid segment {i}/{total_segments} - {start:.2f}s to {end:.2f}s"
+                )
+
+        logger.info(
+            f"🎯 All clips processed! {len(clips)} valid clips out of {total_segments} segments"
+        )
 
         if not clips:
             raise ValueError("No valid segments found!")
@@ -151,10 +167,11 @@ def create_montage(video_file, segments, output_file):
             f"Final video properties - Size: {final_video.size}, FPS: {final_video.fps}"
         )
 
-        # Write the final video with enhanced settings to preserve quality and aspect ratio
+        # Write the final video with HDR support and enhanced settings
+        logger.info("🎨 Encoding video with HDR support...")
         final_video.write_videofile(
             output_file,
-            codec="libx264",
+            codec="libx265",  # H.265 for better HDR support
             audio_codec="aac",
             temp_audiofile="temp-audio.m4a",
             remove_temp=True,
@@ -164,22 +181,31 @@ def create_montage(video_file, segments, output_file):
             # Preserve original video properties
             fps=original_fps,
             bitrate=None,  # Let it auto-detect to maintain quality
-            # Additional settings to preserve aspect ratio and quality
+            # HDR and enhanced settings
             ffmpeg_params=[
                 "-crf",
                 "18",  # High quality encoding
                 "-profile:v",
-                "high",  # H.264 high profile
+                "main10",  # H.265 main10 profile for HDR
                 "-level",
-                "4.1",  # H.264 level
+                "5.1",  # H.265 level for HDR
                 "-pix_fmt",
-                "yuv420p",  # Pixel format for compatibility
+                "yuv420p10le",  # 10-bit pixel format for HDR
+                "-color_primaries",
+                "bt2020",  # HDR color primaries
+                "-color_trc",
+                "smpte2084",  # HDR transfer characteristics (PQ)
+                "-colorspace",
+                "bt2020nc",  # HDR colorspace
                 "-movflags",
                 "+faststart",  # Optimize for streaming
                 "-aspect",
                 f"{original_size[0]}:{original_size[1]}",  # Preserve aspect ratio
                 "-s",
                 f"{original_size[0]}x{original_size[1]}",  # Preserve resolution
+                # Force HDR metadata
+                "-x265-params",
+                "hdr10=1:hdr10-opt=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc",
             ],
         )
 
