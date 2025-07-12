@@ -46,9 +46,9 @@ frontend:
 
 # Backend development server  
 backend:
-	@echo "⚡ Starting backend development server..."
+	@echo "⚡ Starting backend development server with live reload..."
 	@echo "Backend will run on: http://localhost:8000"
-	cd backend && python main.py
+	cd backend && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Build frontend for production
 build:
