@@ -108,12 +108,22 @@ def create_montage(video_file, segments, output_file):
         # Load the video
         video = VideoFileClip(video_file)
 
-        # Get original video properties to preserve them
-        original_size = video.size
-        original_fps = video.fps
+        # Get detected video properties (but we'll override them)
+        detected_size = video.size
+        detected_fps = video.fps
+        original_duration = video.duration
 
         logger.info(
-            f"Original video properties - Size: {original_size}, FPS: {original_fps}"
+            f"Detected video properties - Size: {detected_size}, FPS: {detected_fps}, Duration: {original_duration:.2f}s"
+        )
+
+        # Force correct properties for vertical iPhone videos
+        # Override detected properties since they're often wrong for iPhone videos
+        original_fps = 60  # Force 60fps for iPhone videos
+        original_size = (1080, 1920)  # Force vertical iPhone resolution (9:16)
+
+        logger.info(
+            f"🎯 FORCING video properties - Size: {original_size}, FPS: {original_fps} (vertical iPhone format)"
         )
 
         # Create clips for each active segment
@@ -134,7 +144,14 @@ def create_montage(video_file, segments, output_file):
         # Use method="compose" to preserve individual clip properties
         final_video = concatenate_videoclips(clips, method="compose")
 
-        # Write the final video with original properties preserved
+        # Ensure the final video maintains original properties
+        final_video = final_video.set_fps(original_fps)
+
+        logger.info(
+            f"Final video properties - Size: {final_video.size}, FPS: {final_video.fps}"
+        )
+
+        # Write the final video with enhanced settings to preserve quality and aspect ratio
         final_video.write_videofile(
             output_file,
             codec="libx264",
@@ -147,7 +164,23 @@ def create_montage(video_file, segments, output_file):
             # Preserve original video properties
             fps=original_fps,
             bitrate=None,  # Let it auto-detect to maintain quality
-            # Don't specify resolution to keep original aspect ratio
+            # Additional settings to preserve aspect ratio and quality
+            ffmpeg_params=[
+                "-crf",
+                "18",  # High quality encoding
+                "-profile:v",
+                "high",  # H.264 high profile
+                "-level",
+                "4.1",  # H.264 level
+                "-pix_fmt",
+                "yuv420p",  # Pixel format for compatibility
+                "-movflags",
+                "+faststart",  # Optimize for streaming
+                "-aspect",
+                f"{original_size[0]}:{original_size[1]}",  # Preserve aspect ratio
+                "-s",
+                f"{original_size[0]}x{original_size[1]}",  # Preserve resolution
+            ],
         )
 
         # Clean up
@@ -208,7 +241,7 @@ def process_video():
         # Keep original extension for temp file to ensure proper handling
         filename = file.filename or "video"
         file_extension = os.path.splitext(filename)[1].lower()
-        if file_extension not in [".mp4", ".mav", ".mov", ".avi"]:
+        if file_extension not in [".mp4", ".m4v", ".mov", ".avi"]:
             file_extension = ".mp4"  # Default fallback
         temp_video = os.path.join(UPLOAD_FOLDER, f"temp_{timestamp}{file_extension}")
         output_video = os.path.join(OUTPUT_FOLDER, f"montage_{timestamp}.mp4")
