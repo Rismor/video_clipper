@@ -83,17 +83,34 @@ export default function VideoProcessing({
 
   const handleDownload = (filePath: string, fileName: string) => {
     if (filePath) {
-      // Construct the proper download URL
       const API_BASE_URL = getApiUrl();
-      const downloadUrl = `${API_BASE_URL}${filePath}`;
 
-      // Create a download link
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Check if we're on iOS
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+      let downloadUrl: string;
+
+      if (isIOS) {
+        // For iOS, use the forced download endpoint
+        // Extract filename from path (e.g., "/outputs/video.mp4" -> "video.mp4")
+        const filename = filePath.split("/").pop() || fileName;
+        // filePath comes as "/outputs/filename.mp4", so we construct: /download/outputs/filename
+        downloadUrl = `${API_BASE_URL}/download${filePath}`;
+
+        // For iOS, we need to handle this differently to force download
+        window.location.href = downloadUrl;
+      } else {
+        // For non-iOS devices, use the regular static file serving
+        downloadUrl = `${API_BASE_URL}${filePath}`;
+
+        // Create a download link (works great on desktop/Android)
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     }
   };
 
